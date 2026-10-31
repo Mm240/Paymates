@@ -114,6 +114,52 @@ function IntentBars({ byIntent }) {
   )
 }
 
+// ₹ in lakh / crore, the way an Indian finance team reads it.
+export function lakhCrore(n) {
+  const sign = n < 0 ? '-' : ''
+  const a = Math.abs(n)
+  if (a >= 1e7) return `${sign}₹${(a / 1e7).toFixed(2)} crore`
+  if (a >= 1e5) return `${sign}₹${(a / 1e5).toFixed(2)} lakh`
+  return `${sign}${inr(a)}`
+}
+
+function Roi({ liveRate, hasTickets, manualMinutes }) {
+  const [tickets, setTickets] = useState(100000)
+  const [human, setHuman] = useState(50)
+  const [ai, setAi] = useState(2)
+  const [rate, setRate] = useState(null) // null = follow the live dashboard rate
+  const r = rate ?? (hasTickets ? Math.round(liveRate * 100) : 60)
+  const resolved = tickets * (r / 100)
+  const monthly = resolved * human - tickets * ai // humans no longer handle the AI-resolved share; AI runs on every ticket
+  const hours = (resolved * manualMinutes) / 60
+  const num = (set) => (e) => set(Math.max(0, Number(e.target.value) || 0))
+  return (
+    <section className="panel roi">
+      <div className="panel-head">
+        <h2>ROI calculator</h2>
+        <span className="chip hold">Example assumptions, replace with real numbers</span>
+      </div>
+      <div className="panel-body roi-body">
+        <div className="roi-inputs">
+          <label>Tickets per month<input type="number" min="0" step="1000" value={tickets} onChange={num(setTickets)} /></label>
+          <label>Cost per human-handled ticket (₹)<input type="number" min="0" value={human} onChange={num(setHuman)} /></label>
+          <label>AI cost per ticket (₹)<input type="number" min="0" step="0.5" value={ai} onChange={num(setAi)} /></label>
+          <label>AI resolution rate (%)
+            <input type="number" min="0" max="100" value={r} onChange={(e) => setRate(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} />
+            <small className="muted">{rate == null ? (hasTickets ? 'Following the live dashboard rate' : 'No tickets yet, so an example 60%') : <button className="link" onClick={() => setRate(null)}>Use the live rate</button>}</small>
+          </label>
+        </div>
+        <div className="roi-out">
+          <div><small>Monthly savings</small><b className="num">{lakhCrore(monthly)}</b></div>
+          <div><small>Yearly savings</small><b className="num">{lakhCrore(monthly * 12)}</b></div>
+          <div><small>Specialist hours freed / month</small><b className="num">{Math.round(hours).toLocaleString('en-IN')} h</b></div>
+        </div>
+        <p className="muted roi-note">Savings = tickets × resolution rate × human cost − tickets × AI cost. Hours = AI-resolved tickets × {manualMinutes} min. These inputs are illustrative assumptions, <b>not Paytm data</b>.</p>
+      </div>
+    </section>
+  )
+}
+
 export function Dashboard({ metrics, tickets, audit, info, onSimulate, simState, onReset }) {
   const [n, setN] = useState(25)
   const m = metrics || { total: 0, ai_resolution_rate: 0, series: [], by_intent: {}, recovered_value: 0, hours_saved: 0, manual_minutes_baseline: 18 }
@@ -211,6 +257,8 @@ export function Dashboard({ metrics, tickets, audit, info, onSimulate, simState,
           </section>
         </div>
       </div>
+
+      <Roi liveRate={m.ai_resolution_rate} hasTickets={m.total > 0} manualMinutes={m.manual_minutes_baseline || 18} />
 
       <div className="grid-2">
         <section className="panel">
