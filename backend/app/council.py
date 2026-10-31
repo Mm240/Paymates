@@ -25,7 +25,7 @@ import os
 import time
 from typing import Optional
 
-from .config import POLICY, PROVIDERS, ModelSpec, mode, provider_available
+from .config import LLM_TIMEOUT, POLICY, PROVIDERS, ModelSpec, mode, model_for, provider_available
 from .llm import chat, parse_json
 from .store import Store, now_ms
 from .text import inr
@@ -41,9 +41,14 @@ def jurors() -> list[ModelSpec]:
     """One fast model per configured provider, so the jury spans different labs."""
     if mode() == "offline":
         return []
+    triage = model_for("triage")
     out = []
     for name, p in PROVIDERS.items():
         if provider_available(name):
+            # Reuse the light triage model on its provider: one less model to rate-limit on free tiers.
+            if triage and triage.provider == name:
+                out.append(triage)
+                continue
             key = os.getenv(p["key_env"]) if p.get("key_env") else None
             out.append(ModelSpec(name, p["fast"], p["kind"], p["base"], key))
     return out[:MAX_JURORS]
@@ -135,7 +140,7 @@ async def ask_juror(spec: ModelSpec, case: dict) -> dict:
         out = await asyncio.wait_for(
             chat(spec, [{"role": "system", "content": JUROR_PROMPT}, {"role": "user", "content": json.dumps(case, default=str)}],
                  json_mode=True, temperature=0, max_tokens=120),
-            timeout=12)
+            timeout=LLM_TIMEOUT)
         data = parse_json(out["text"])
         vote = "HOLD" if str(data.get("vote", "")).upper().startswith("HOLD") else "APPROVE"
         reason = str(data.get("reason") or "").strip()[:160] or "No reason given"

@@ -15,6 +15,7 @@ Two adapters cover every provider we support:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from typing import Any, Optional
@@ -28,6 +29,13 @@ class LLMError(Exception):
     pass
 
 
+class RateLimited(LLMError):
+    """HTTP 429 from the provider."""
+
+
+RETRY_WAIT_S = 2.0
+
+
 async def chat(
     spec: ModelSpec,
     messages: list[dict],
@@ -36,14 +44,21 @@ async def chat(
     temperature: float = 0.2,
     max_tokens: int = 900,
 ) -> dict:
-    try:
-        if spec.kind == "anthropic":
-            return await _anthropic(spec, messages, tools, temperature, max_tokens)
-        return await _openai_compatible(spec, messages, tools, json_mode, temperature, max_tokens)
-    except LLMError:
-        raise
-    except Exception as exc:  # network, timeout, bad JSON from provider...
-        raise LLMError(f"{spec.label}: {type(exc).__name__}: {exc}") from exc
+    for attempt in (1, 2):
+        try:
+            if spec.kind == "anthropic":
+                return await _anthropic(spec, messages, tools, temperature, max_tokens)
+            return await _openai_compatible(spec, messages, tools, json_mode, temperature, max_tokens)
+        except RateLimited:
+            # Free tiers rate-limit in bursts: wait once, then let the caller fall back to rules.
+            if attempt == 2:
+                raise
+            await asyncio.sleep(RETRY_WAIT_S)
+        except LLMError:
+            raise
+        except Exception as exc:  # network, timeout, bad JSON from provider...
+            raise LLMError(f"{spec.label}: {type(exc).__name__}: {exc}") from exc
+    raise LLMError(f"{spec.label}: unreachable")
 
 
 # ---------------------------------------------------------------- OpenAI-compatible
@@ -59,7 +74,9 @@ def _to_openai_messages(messages: list[dict]) -> list[dict]:
                 "content": m.get("content") or None,
                 "tool_calls": [
                     {"id": tc["id"], "type": "function",
-                     "function": {"name": tc["name"], "arguments": json.dumps(tc["args"])}}
+                     "function": {"name": tc["name"], "arguments": json.dumps(tc["args"])},
+                     # Gemini 3 signs each tool call and rejects the next turn without the signature.
+                     **({"extra_content": tc["extra"]} if tc.get("extra") else {})}
                     for tc in m["tool_calls"]
                 ],
             })
@@ -89,6 +106,8 @@ async def _openai_compatible(spec, messages, tools, json_mode, temperature, max_
         headers["Authorization"] = f"Bearer {spec.key}"
     async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
         r = await client.post(f"{spec.base}/chat/completions", headers=headers, json=body)
+    if r.status_code == 429:
+        raise RateLimited(f"{spec.label} HTTP 429: rate limited")
     if r.status_code >= 400:
         raise LLMError(f"{spec.label} HTTP {r.status_code}: {r.text[:300]}")
     data = r.json()
@@ -100,7 +119,10 @@ async def _openai_compatible(spec, messages, tools, json_mode, temperature, max_
             args = json.loads(raw) if isinstance(raw, str) else raw
         except json.JSONDecodeError:
             args = {}
-        calls.append({"id": tc.get("id") or f"call_{len(calls)}", "name": tc["function"]["name"], "args": args or {}})
+        call = {"id": tc.get("id") or f"call_{len(calls)}", "name": tc["function"]["name"], "args": args or {}}
+        if tc.get("extra_content"):
+            call["extra"] = tc["extra_content"]
+        calls.append(call)
     return {"text": msg.get("content") or "", "tool_calls": calls}
 
 
@@ -144,6 +166,8 @@ async def _anthropic(spec, messages, tools, temperature, max_tokens) -> dict:
     headers = {"x-api-key": spec.key or "", "anthropic-version": "2023-06-01", "content-type": "application/json"}
     async with httpx.AsyncClient(timeout=LLM_TIMEOUT) as client:
         r = await client.post(f"{spec.base}/messages", headers=headers, json=body)
+    if r.status_code == 429:
+        raise RateLimited(f"{spec.label} HTTP 429: rate limited")
     if r.status_code >= 400:
         raise LLMError(f"{spec.label} HTTP {r.status_code}: {r.text[:300]}")
     data = r.json()

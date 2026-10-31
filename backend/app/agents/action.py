@@ -388,8 +388,16 @@ async def act(store: Store, run: ToolRunner, tri: dict, ctx: dict, text: str, ba
         try:
             return await run_llm(spec, run, store, tri, ctx, text, base), spec.label
         except Exception as exc:
-            # Tools are idempotent, so the playbook can safely pick up where the model stopped.
+            note = str(exc)[:120]
+            # If the model already acted, report what the tools actually did; re-running the
+            # playbook would pick the next record and describe the wrong outcome.
+            summary = f"Model stopped mid-case ({note}); outcome taken from the tool calls it made"
+            done = infer_blocked(store, run.blocked[0], base, tri["language"], summary) if run.blocked \
+                else infer_outcome(store, run.calls, base, tri["language"], summary)
+            if done:
+                done["fallback_note"] = f"LLM error after acting; outcome from tool results: {note}"
+                return done, f"{spec.label} (stopped early: outcome from tool results)"
             res = await run_playbook(run, store, tri, base, text)
-            res["fallback_note"] = f"LLM error, finished with playbook: {str(exc)[:120]}"
+            res["fallback_note"] = f"LLM error, finished with playbook: {note}"
             return res, f"playbook (fallback from {spec.label})"
     return await run_playbook(run, store, tri, base, text), "playbook-engine"

@@ -160,4 +160,4 @@ def pacing_seconds() -> float:
         return 0.45
 
 
-LLM_TIMEOUT = float(os.getenv("PAYMATES_LLM_TIMEOUT", "25"))
+LLM_TIMEOUT = float(os.getenv("PAYMATES_LLM_TIMEOUT", "15"))

@@ -722,8 +722,17 @@ async function act(run, tri, ctx, text, base) {
     if (final.outcome === 'needs_info') return [res('NEEDS_INFO', 'GENERIC_RESOLVED', { ...base, summary }, summary), m.label]
     return [res('RESOLVED_AI', 'GENERIC_RESOLVED', { ...base, summary }, summary), m.label]
   } catch (e) {
+    const note = e?.code || e?.message || 'error'
+    // If the model already acted, report what the tools actually did; re-running the
+    // playbook would pick the next record and describe the wrong outcome.
+    const summary = `Model stopped mid-case (${note}); outcome taken from the tool calls it made`
+    const done = run.blocked.length ? inferBlocked(run.blocked[0], base, tri.language, summary) : inferOutcome(run.calls, base, summary)
+    if (done) {
+      done.fallback_note = `Claude stopped after acting; outcome from tool results (${note})`
+      return [done, `${m.label} (stopped early: outcome from tool results)`]
+    }
     const r = await runPlaybook(run, tri, base, text)
-    r.fallback_note = `Claude unavailable (${e?.code || e?.message || 'error'}), finished with playbook`
+    r.fallback_note = `Claude unavailable (${note}), finished with playbook`
     return [r, `playbook (fallback from ${m.label})`]
   }
 }

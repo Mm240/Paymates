@@ -476,3 +476,64 @@ def test_specialist_button_message_is_a_human_request():
     from app.cards import label
     for lang in ("en", "hi", "hinglish"):
         assert rules_triage(label("m_talk_to_specialist", lang))["intent"] == "HUMAN_REQUEST"
+
+
+# ---------------------------------------------------------------- free-tier resilience
+def test_llm_retries_once_on_429_then_succeeds(monkeypatch):
+    from app import llm
+    calls = []
+
+    async def flaky(spec, messages, tools, json_mode, temperature, max_tokens):
+        calls.append(1)
+        if len(calls) == 1:
+            raise llm.RateLimited("HTTP 429")
+        return {"text": "ok", "tool_calls": []}
+
+    monkeypatch.setattr(llm, "_openai_compatible", flaky)
+    monkeypatch.setattr(llm, "RETRY_WAIT_S", 0)
+    out = asyncio.run(llm.chat(ModelSpec("gemini", "m", "openai", "", "k"), [{"role": "user", "content": "hi"}]))
+    assert out["text"] == "ok" and len(calls) == 2
+
+
+def test_llm_gives_up_after_one_retry(monkeypatch):
+    from app import llm
+
+    async def always_429(*a, **k):
+        raise llm.RateLimited("HTTP 429")
+
+    monkeypatch.setattr(llm, "_openai_compatible", always_429)
+    monkeypatch.setattr(llm, "RETRY_WAIT_S", 0)
+    with pytest.raises(llm.LLMError):
+        asyncio.run(llm.chat(ModelSpec("gemini", "m", "openai", "", "k"), [{"role": "user", "content": "hi"}]))
+
+
+def test_council_juror_reuses_the_triage_model(monkeypatch):
+    from app import council
+    lite = ModelSpec("gemini", "gemini-3.5-flash-lite", "openai", "", "k")
+    monkeypatch.setattr(council, "mode", lambda: "auto")
+    monkeypatch.setattr(council, "provider_available", lambda name: name == "gemini")
+    monkeypatch.setattr(council, "model_for", lambda agent: lite if agent == "triage" else None)
+    assert council.jurors() == [lite]
+
+
+def test_tool_call_signature_is_sent_back():
+    from app.llm import _to_openai_messages
+    sig = {"google": {"thought_signature": "abc"}}
+    out = _to_openai_messages([{"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "get_transaction", "args": {"txn_id": "T1"}, "extra": sig}]}])
+    assert out[0]["tool_calls"][0]["extra_content"] == sig
+
+
+def test_model_failing_after_acting_keeps_the_real_outcome(store, monkeypatch):
+    """Regression: the model credits ₹1,250 then times out; the playbook must not re-run and pick another payment."""
+    from app.agents import action
+
+    async def acts_then_dies(spec, run, store_, tri, ctx, text, base):
+        await run.run("recheck_payment_status", {"txn_id": "T88120045"})
+        await run.run("mark_payment_recovered", {"txn_id": "T88120045"})
+        raise TimeoutError("ReadTimeout")
+
+    monkeypatch.setattr(action, "model_for", lambda agent: ModelSpec("gemini", "m", "openai", "", "k"))
+    monkeypatch.setattr(action, "run_llm", acts_then_dies)
+    t, ev = run(store, "M1001", "Customer's payment failed but money was deducted.")
+    assert t["outcome"] == "PAYMENT_RECOVERED" and t["recovered_amount"] == 1250
+    assert "list_transactions" not in tools_called(ev)
