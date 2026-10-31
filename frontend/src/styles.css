@@ -497,3 +497,65 @@ body {
 .roi-inputs input { height: 38px; }
 .similar { display: flex; gap: 8px; align-items: flex-start; border: 1px dashed color-mix(in srgb, var(--human) 50%, var(--line)); background: var(--human-soft); border-radius: 12px; padding: 10px 12px; font-size: 13.5px; }
 .similar svg { color: var(--human); margin-top: 2px; flex: none; }
+
+/* ------------------------------------------------------------------ rich reply cards (generative UI) */
+.bubble.has-card { max-width: 94%; width: 94%; padding: 6px 6px 9px; }
+.bubble.has-card > .rcard { margin-bottom: 8px; }
+.bubble.has-card { padding-left: 6px; }
+.rcard {
+  --tone: var(--sky); --tone-soft: var(--sky-soft);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 11px 12px 10px;
+  display: grid; gap: 9px; white-space: normal; box-shadow: 0 1px 0 var(--line), 0 6px 18px -14px rgba(11, 27, 58, 0.5);
+  position: relative; overflow: hidden;
+}
+.rcard::before { content: ''; position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg, var(--tone), color-mix(in srgb, var(--tone) 30%, transparent)); }
+.rcard.success { --tone: var(--ok); --tone-soft: var(--ok-soft); }
+.rcard.held, .rcard.pending { --tone: var(--hold-mark); --tone-soft: var(--hold-soft); }
+.rcard.info { --tone: var(--human); --tone-soft: var(--human-soft); }
+.rcard-top { display: flex; align-items: flex-start; gap: 8px; justify-content: space-between; }
+.rcard-title { font-weight: 650; font-size: 13px; line-height: 1.3; color: var(--ink); }
+.rcard-chip {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 650; border-radius: 999px;
+  padding: 2px 8px 2px 6px; background: var(--tone-soft); color: var(--tone); white-space: nowrap;
+}
+.rcard.held .rcard-chip, .rcard.pending .rcard-chip { color: var(--hold); }
+.rcard-chip svg { width: 12px; height: 12px; }
+.rcard-amount { font-family: var(--f-display); font-weight: 800; font-size: 28px; letter-spacing: -0.02em; line-height: 1; color: var(--ink); }
+.rcard-kv { margin: 0; display: grid; gap: 0; border-top: 1px dashed var(--line); padding-top: 6px; }
+.rcard-kv div { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 12px; min-width: 0; }
+.rcard-kv dt { color: var(--muted); flex: none; max-width: 48%; }
+.rcard-kv dd { margin: 0; text-align: right; color: var(--ink); font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.rcard-kv dd.mono { font-size: 11.5px; }
+.rcard-kv dd.vote { font-weight: 650; }
+.rcard-kv dd.vote.APPROVE { color: var(--ok); }
+.rcard-kv dd.vote.HOLD { color: var(--hold); }
+.rcard-kv dd.vote.ABSTAIN { color: var(--muted); }
+/* step tracker: Held -> Re-sent -> Arriving */
+.rcard-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+.rcard-steps li { position: relative; display: grid; justify-items: center; gap: 4px; font-size: 10.5px; line-height: 1.2; text-align: center; color: var(--muted); }
+.rcard-steps li::before { content: ''; position: absolute; top: 5px; right: 50%; width: 100%; height: 2px; background: var(--line); z-index: 0; }
+.rcard-steps li:first-child::before { display: none; }
+.rcard-steps .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--surface-3); border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--line); position: relative; z-index: 1; }
+.rcard-steps li.done { color: var(--ink-2); }
+.rcard-steps li.done .dot { background: var(--ok); box-shadow: 0 0 0 1px var(--ok); }
+.rcard-steps li.done::before, .rcard-steps li.current::before { background: var(--ok); }
+.rcard-steps li.current { color: var(--ink); font-weight: 600; }
+.rcard-steps li.current .dot { background: var(--tone); box-shadow: 0 0 0 3px var(--tone-soft); animation: pulse 1.6s ease-in-out infinite; }
+/* hisaab: UPI in bank vs card/wallet next day */
+.rcard-bars { display: grid; gap: 6px; }
+.rcard-bar { display: flex; height: 10px; border-radius: 6px; overflow: hidden; gap: 2px; background: var(--surface-3); }
+.rcard-bar span { min-width: 4px; }
+.rcard-bar .upi, .rcard-legend i.upi { background: var(--ok); }
+.rcard-bar .card, .rcard-legend i.card { background: var(--sky); }
+.rcard-legend { display: grid; gap: 3px; font-size: 11.5px; color: var(--ink-2); }
+.rcard-legend span { display: flex; align-items: center; gap: 6px; }
+.rcard-legend i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.rcard-legend b { margin-left: auto; color: var(--ink); }
+.rcard-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.rcard-actions button {
+  flex: 1 1 auto; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); border-radius: 9px;
+  padding: 6px 10px; font-size: 12px; font-weight: 600;
+}
+.rcard-actions button.primary { background: var(--navy); border-color: var(--navy); color: var(--navy-ink); }
+.rcard-actions button:hover { filter: brightness(1.08); }
+.bubble.human.has-card .rcard { background: var(--surface); }

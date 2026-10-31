@@ -16,6 +16,7 @@ import asyncio
 import time
 from typing import Awaitable, Callable
 
+from .. import cards
 from ..config import POLICY, pacing_seconds
 from ..guardrails import mask_pii
 from ..store import Store, now_ms
@@ -183,7 +184,10 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
         intro = render(watch["intro"], tri["language"], {**base, **watch["facts"]})
         reply = f"{intro}\n\n{reply}"
     store.add_message(merchant_id, "assistant", reply, ticket_id)
-    await emit({"type": "reply", "text": reply, "lang": tri["language"], "ticket_id": ticket_id})
+    held = [x for x in runner.sessions if not x["approved"]]
+    card = cards.build(act["outcome"], act["facts"], tri["language"], store, merchant_id,
+                       {"escalation_id": escalation["id"] if escalation else None, "votes": held[-1]["votes"] if held else None})
+    await emit({"type": "reply", "text": reply, "lang": tri["language"], "ticket_id": ticket_id, "card": card})
 
     # 8. CLOSE THE TICKET --------------------------------------------------
     status = {"RESOLVED_AI": "RESOLVED_AI", "ESCALATE": "ESCALATED", "NEEDS_INFO": "NEEDS_INFO"}[act["status"]]
@@ -191,9 +195,9 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
     changes = {"lang": tri["language"], "intent": tri["intent"], "confidence": tri["confidence"], "status": status,
                "outcome": act["outcome"], "summary": act["summary"], "reply": reply, "duration_ms": duration,
                "resolved_at": now_ms() if status == "RESOLVED_AI" else None, "recovered_amount": runner.recovered,
-               "models": models, "facts": {k: v for k, v in act["facts"].items() if isinstance(v, (str, int, float))}}
+               "models": models, "card": card, "facts": {k: v for k, v in act["facts"].items() if isinstance(v, (str, int, float))}}
     store.update("tickets", ticket_id, changes)
     store.audit(ticket_id, "orchestrator", "close", {"status": status, "outcome": act["outcome"], "duration_ms": duration})
     ticket = store.ticket(ticket_id)
-    await emit({"type": "done", "ticket": ticket, "escalation": escalation})
+    await emit({"type": "done", "ticket": ticket, "escalation": escalation, "card": card})
     return ticket

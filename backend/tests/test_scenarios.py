@@ -416,3 +416,63 @@ def test_general_words_do_not_lower_specific_confidence(text, intent):
 def test_refund_question_is_acted_on_not_escalated(store):
     t, _ = run(store, "M1002", "what is this refund i didnt get yet")
     assert t["intent"] == "REFUND_ISSUE" and t["outcome"] == "REFUND_NEEDS_APPROVAL"   # handled by the playbook, not LOW_CONFIDENCE
+
+
+# ---------------------------------------------------------------- rich reply cards
+def card_of(ev):
+    done = next(e for e in ev if e["type"] == "done")
+    reply = next(e for e in ev if e["type"] == "reply")
+    assert done["card"] == reply["card"] == done["ticket"]["card"]
+    return done["card"]
+
+
+def test_card_demo_1_payment_recovered(store):
+    _, ev = run(store, "M1001", "Customer's payment failed but money was deducted.")
+    c = card_of(ev)
+    assert (c["type"], c["status"], c["amount"]) == ("payment_recovered", "success", "₹1,250")
+    assert {"label": "Txn", "value": "T88120045"} in c["refs"]
+
+
+def test_card_demo_2_settlement_resent_with_tracker(store):
+    t, ev = run(store, "M1001", "Kal ka settlement nahi aaya")
+    c = card_of(ev)
+    assert (c["type"], c["amount"]) == ("settlement_resent", "₹18,640")
+    assert [s["state"] for s in c["steps"]] == ["done", "done", "current"]
+    assert {"label": "UTR", "value": store.settlement("S2610300")["utr"]} in c["refs"]
+    assert c["title"] == "Settlement dobara bheja"                  # labels in the reply's language (Hinglish)
+
+
+def test_card_demo_3_refund_held(store):
+    _, ev = run(store, "M1002", "Customer says refund not received.")
+    c = card_of(ev)
+    assert (c["type"], c["status"], c["amount"]) == ("refund_held", "held", "₹7,800")
+    assert c["actions"][0]["action"] == "talk_to_specialist"
+    assert any(r["label"] == "Case" and r["value"].startswith("ESC-") for r in c["refs"])
+
+
+def test_card_specialist_followup(store):
+    run(store, "M1002", "Customer says refund not received.")
+    out = asyncio.run(ops.decide(store, store.escalations()[0]["id"], True, "Priya (Support)"))
+    c = out["followup"]["card"]
+    assert (c["type"], c["status"], c["amount"]) == ("refund_status", "success", "₹7,800")
+
+
+def test_cards_on_checkin(store):
+    out, ev = checkin(store, "M1003")
+    by = {t["subject"]: t["card"] for t in out["tickets"]}
+    assert (by["T88340299"]["type"], by["T88340299"]["amount"]) == ("payment_recovered", "₹860")
+    assert (by["T88340266"]["type"], by["T88340266"]["amount"]) == ("council_hold", "₹3,400")
+    assert any(r.get("vote") == "HOLD" for r in by["T88340266"]["rows"])
+    assert (by["S2610302"]["type"], by["S2610302"]["amount"]) == ("settlement_kyc_hold", "₹9,415")
+    sb = by["SB-41890"]
+    assert sb["type"] == "soundbox_status" and sb["title"] == "साउंडबॉक्स म्यूट है"     # Hindi labels for Anil
+    assert {r["label"] for r in sb["rows"]} >= {"ऑनलाइन", "सिग्नल", "बैटरी", "वॉल्यूम"}
+    h = out["hisaab_card"]
+    assert h["type"] == "hisaab" and [b["value"] for b in h["bars"]] == [740, 1180]
+
+
+def test_specialist_button_message_is_a_human_request():
+    from app.agents.triage import rules_triage
+    from app.cards import label
+    for lang in ("en", "hi", "hinglish"):
+        assert rules_triage(label("m_talk_to_specialist", lang))["intent"] == "HUMAN_REQUEST"

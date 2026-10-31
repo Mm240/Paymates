@@ -8,7 +8,7 @@
     "REFUND_ISSUE": ["refund","wapas nahi mila","money back","रिफंड","वापस नहीं"],
     "SOUNDBOX": ["soundbox","sound box","speaker","awaaz","awaz","announcement","announce","not speaking","bol nahi","bolta nahi","volume","beep","साउंडबॉक्स","आवाज़","आवाज","बोल नहीं","बोलता नहीं"],
     "KYC": ["kyc","document","docs","kagaz","kagzaat","pan","aadhaar","gst","verification","केवाईसी","दस्तावेज","दस्तावेज़","कागज"],
-    "HUMAN_REQUEST": ["human","real person","customer care","talk to someone","talk to a person","call me","insaan","manager","baat karni","baat karao","किसी इंसान","कॉल करो","बात करनी"],
+    "HUMAN_REQUEST": ["human","real person","customer care","talk to someone","talk to a person","call me","insaan","manager","baat karni","baat karao","किसी इंसान","कॉल करो","बात करनी","talk to a specialist","speak to","specialist se baat"],
     "GENERAL": ["how","when","what","kitne din","kab tak","kaise","timeline","policy","statement","report","qr","language","bhasha","dispute","chargeback","कब तक","कैसे"]
   },
   "intent_weights": { "GENERAL": 0.5 },

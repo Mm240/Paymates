@@ -94,6 +94,7 @@ async def checkin(store: Store, mid: str, emit: Emit, pacing: Optional[float] = 
         store.add_message(mid, "assistant", message, None)
     store.audit(None, "watcher", "checkin", {"merchant": mid, "found": len(findings)})
     summary = hisaab.send(store, mid)          # end every check-in with the day's hisaab
-    result = {"merchant_id": mid, "found": len(findings), "tickets": tickets, "message": message, "hisaab": summary["text"]}
+    result = {"merchant_id": mid, "found": len(findings), "tickets": tickets, "message": message, "hisaab": summary["text"],
+              "hisaab_card": summary["card"]}
     await emit({"type": "checkin_done", **result})
     return result

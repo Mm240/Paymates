@@ -320,5 +320,988 @@
       "hinglish": ", ",
       "hi": ", "
     }
+  },
+  "cards": {
+    "_note": "Rich reply cards. outcomes map an outcome to a card; refs/rows are [label_key, fact_key] or [label_key, '@label_key'] for fixed text. Values only ever come from facts.",
+    "labels": {
+      "t_payment_recovered": {
+        "en": "Payment recovered",
+        "hinglish": "Payment wapas mil gaya",
+        "hi": "भुगतान वापस मिल गया"
+      },
+      "t_payment_reversal": {
+        "en": "Money returning to customer",
+        "hinglish": "Customer ko paisa wapas aa raha hai",
+        "hi": "ग्राहक को पैसा वापस आ रहा है"
+      },
+      "t_not_debited": {
+        "en": "No money was taken",
+        "hinglish": "Koi paisa nahi kata",
+        "hi": "कोई पैसा नहीं कटा"
+      },
+      "t_settlement_resent": {
+        "en": "Settlement re-sent",
+        "hinglish": "Settlement dobara bheja",
+        "hi": "सेटलमेंट दोबारा भेजा"
+      },
+      "t_settlement_processing": {
+        "en": "Settlement on its way",
+        "hinglish": "Settlement raaste mein hai",
+        "hi": "सेटलमेंट रास्ते में है"
+      },
+      "t_settlement_done": {
+        "en": "Settled to your bank",
+        "hinglish": "Bank mein settle ho gaya",
+        "hi": "बैंक में सेटल हो गया"
+      },
+      "t_kyc_hold": {
+        "en": "Settlement held for KYC",
+        "hinglish": "KYC ki wajah se settlement ruka",
+        "hi": "KYC के कारण सेटलमेंट रुका"
+      },
+      "t_kyc_pending": {
+        "en": "KYC pending",
+        "hinglish": "KYC pending hai",
+        "hi": "KYC अधूरा है"
+      },
+      "t_kyc_ok": {
+        "en": "KYC verified",
+        "hinglish": "KYC verified hai",
+        "hi": "KYC पूरा है"
+      },
+      "t_refund_resent": {
+        "en": "Refund re-sent",
+        "hinglish": "Refund dobara bheja",
+        "hi": "रिफंड दोबारा भेजा"
+      },
+      "t_refund_progress": {
+        "en": "Refund in progress",
+        "hinglish": "Refund process ho raha hai",
+        "hi": "रिफंड प्रोसेस हो रहा है"
+      },
+      "t_refund_done": {
+        "en": "Refund completed",
+        "hinglish": "Refund pura hua",
+        "hi": "रिफंड पूरा हुआ"
+      },
+      "t_refund_held": {
+        "en": "Refund waiting for approval",
+        "hinglish": "Refund approval ka intezaar",
+        "hi": "रिफंड मंज़ूरी के इंतज़ार में"
+      },
+      "t_council_hold": {
+        "en": "Held by the safety council",
+        "hinglish": "Safety council ne roka",
+        "hi": "सुरक्षा परिषद ने रोका"
+      },
+      "t_money_held": {
+        "en": "Waiting for specialist approval",
+        "hinglish": "Specialist approval ka intezaar",
+        "hi": "विशेषज्ञ की मंज़ूरी का इंतज़ार"
+      },
+      "t_soundbox_fixed": {
+        "en": "Soundbox fixed",
+        "hinglish": "Soundbox theek ho gaya",
+        "hi": "साउंडबॉक्स ठीक हो गया"
+      },
+      "t_soundbox_guide": {
+        "en": "Soundbox is on mute",
+        "hinglish": "Soundbox mute hai",
+        "hi": "साउंडबॉक्स म्यूट है"
+      },
+      "t_soundbox_ok": {
+        "en": "Soundbox is healthy",
+        "hinglish": "Soundbox theek hai",
+        "hi": "साउंडबॉक्स ठीक है"
+      },
+      "t_soundbox_replace": {
+        "en": "Replacement booked",
+        "hinglish": "Replacement book hua",
+        "hi": "बदलाव बुक हुआ"
+      },
+      "t_soundbox_language": {
+        "en": "Announcement language changed",
+        "hinglish": "Announcement ki bhasha badli",
+        "hi": "घोषणा की भाषा बदली"
+      },
+      "t_handoff": {
+        "en": "With a specialist",
+        "hinglish": "Specialist ke paas",
+        "hi": "विशेषज्ञ के पास"
+      },
+      "t_need_info": {
+        "en": "Need a few details",
+        "hinglish": "Thodi jaankari chahiye",
+        "hi": "थोड़ी जानकारी चाहिए"
+      },
+      "t_answer": {
+        "en": "Answer",
+        "hinglish": "Jawab",
+        "hi": "जवाब"
+      },
+      "t_hisaab": {
+        "en": "Today's hisaab",
+        "hinglish": "Aaj ka hisaab",
+        "hi": "आज का हिसाब"
+      },
+      "t_specialist_approved": {
+        "en": "Approved by a specialist",
+        "hinglish": "Specialist ne approve kiya",
+        "hi": "विशेषज्ञ ने मंज़ूरी दी"
+      },
+      "t_specialist_declined": {
+        "en": "A specialist will call you",
+        "hinglish": "Specialist aapko call karenge",
+        "hi": "विशेषज्ञ आपको कॉल करेंगे"
+      },
+      "s_success": {
+        "en": "Done",
+        "hinglish": "Ho gaya",
+        "hi": "हो गया"
+      },
+      "s_pending": {
+        "en": "In progress",
+        "hinglish": "Chal raha hai",
+        "hi": "चल रहा है"
+      },
+      "s_held": {
+        "en": "On hold",
+        "hinglish": "Ruka hai",
+        "hi": "रुका है"
+      },
+      "s_info": {
+        "en": "Info",
+        "hinglish": "Jaankari",
+        "hi": "जानकारी"
+      },
+      "l_txn": {
+        "en": "Txn",
+        "hinglish": "Txn",
+        "hi": "Txn"
+      },
+      "l_utr": {
+        "en": "UTR",
+        "hinglish": "UTR",
+        "hi": "UTR"
+      },
+      "l_ticket": {
+        "en": "Ticket",
+        "hinglish": "Ticket",
+        "hi": "टिकट"
+      },
+      "l_settlement": {
+        "en": "Settlement",
+        "hinglish": "Settlement",
+        "hi": "सेटलमेंट"
+      },
+      "l_refund": {
+        "en": "Refund",
+        "hinglish": "Refund",
+        "hi": "रिफंड"
+      },
+      "l_ref": {
+        "en": "Ref",
+        "hinglish": "Ref",
+        "hi": "Ref"
+      },
+      "l_arn": {
+        "en": "ARN",
+        "hinglish": "ARN",
+        "hi": "ARN"
+      },
+      "l_device": {
+        "en": "Device",
+        "hinglish": "Device",
+        "hi": "डिवाइस"
+      },
+      "l_case": {
+        "en": "Case",
+        "hinglish": "Case",
+        "hi": "केस"
+      },
+      "l_bank": {
+        "en": "Bank",
+        "hinglish": "Bank",
+        "hi": "बैंक"
+      },
+      "l_credited_to": {
+        "en": "Credited to",
+        "hinglish": "Kahan jayega",
+        "hi": "कहाँ जाएगा"
+      },
+      "l_arrives": {
+        "en": "Arrives",
+        "hinglish": "Kab aayega",
+        "hi": "कब आएगा"
+      },
+      "l_docs": {
+        "en": "Missing documents",
+        "hinglish": "Baaki documents",
+        "hi": "बाकी दस्तावेज़"
+      },
+      "l_why": {
+        "en": "Why",
+        "hinglish": "Kyun",
+        "hi": "क्यों"
+      },
+      "l_sent_to": {
+        "en": "Sent to",
+        "hinglish": "Kahan bheja",
+        "hi": "कहाँ भेजा"
+      },
+      "l_reason": {
+        "en": "Reason",
+        "hinglish": "Wajah",
+        "hi": "वजह"
+      },
+      "l_online": {
+        "en": "Online",
+        "hinglish": "Online",
+        "hi": "ऑनलाइन"
+      },
+      "l_signal": {
+        "en": "Signal",
+        "hinglish": "Signal",
+        "hi": "सिग्नल"
+      },
+      "l_battery": {
+        "en": "Battery",
+        "hinglish": "Battery",
+        "hi": "बैटरी"
+      },
+      "l_volume": {
+        "en": "Volume",
+        "hinglish": "Volume",
+        "hi": "वॉल्यूम"
+      },
+      "l_language": {
+        "en": "Language",
+        "hinglish": "Bhasha",
+        "hi": "भाषा"
+      },
+      "l_source": {
+        "en": "Source",
+        "hinglish": "Source",
+        "hi": "स्रोत"
+      },
+      "l_specialist": {
+        "en": "Specialist",
+        "hinglish": "Specialist",
+        "hi": "विशेषज्ञ"
+      },
+      "l_note": {
+        "en": "Note",
+        "hinglish": "Note",
+        "hi": "नोट"
+      },
+      "l_fixed_today": {
+        "en": "Fixed today",
+        "hinglish": "Aaj theek kiya",
+        "hi": "आज ठीक किया"
+      },
+      "v_next_settlement": {
+        "en": "Next settlement",
+        "hinglish": "Agla settlement",
+        "hi": "अगला सेटलमेंट"
+      },
+      "v_2h": {
+        "en": "~2 hours",
+        "hinglish": "~2 ghante",
+        "hi": "~2 घंटे"
+      },
+      "v_1day": {
+        "en": "Within 1 working day",
+        "hinglish": "1 working day mein",
+        "hi": "1 कामकाजी दिन में"
+      },
+      "v_customer_source": {
+        "en": "Customer's original payment method",
+        "hinglish": "Customer ka original payment method",
+        "hi": "ग्राहक का मूल भुगतान तरीका"
+      },
+      "v_above_limit": {
+        "en": "Above the ₹5,000 auto limit",
+        "hinglish": "₹5,000 auto limit se zyada",
+        "hi": "₹5,000 की ऑटो सीमा से ज़्यादा"
+      },
+      "v_autonomy": {
+        "en": "Ops asked for approval on money moves",
+        "hinglish": "Ops ne paise ke kaam par approval maanga",
+        "hi": "Ops ने पैसे के काम पर मंज़ूरी माँगी"
+      },
+      "v_yes": {
+        "en": "Yes",
+        "hinglish": "Haan",
+        "hi": "हाँ"
+      },
+      "v_no": {
+        "en": "No",
+        "hinglish": "Nahi",
+        "hi": "नहीं"
+      },
+      "v_APPROVE": {
+        "en": "Approve",
+        "hinglish": "Approve",
+        "hi": "मंज़ूर"
+      },
+      "v_HOLD": {
+        "en": "Hold",
+        "hinglish": "Hold",
+        "hi": "रोकें"
+      },
+      "v_ABSTAIN": {
+        "en": "Abstain",
+        "hinglish": "Abstain",
+        "hi": "अनुपस्थित"
+      },
+      "st_held": {
+        "en": "Held",
+        "hinglish": "Ruka",
+        "hi": "रुका"
+      },
+      "st_resent": {
+        "en": "Re-sent",
+        "hinglish": "Dobara bheja",
+        "hi": "दोबारा भेजा"
+      },
+      "st_arriving": {
+        "en": "Arriving ~2h",
+        "hinglish": "~2 ghante mein",
+        "hi": "~2 घंटे में"
+      },
+      "st_press_plus": {
+        "en": "Press + 3 times",
+        "hinglish": "+ 3 baar dabaiye",
+        "hi": "+ 3 बार दबाइए"
+      },
+      "st_test": {
+        "en": "Hear a test announcement",
+        "hinglish": "Test announcement suniye",
+        "hi": "टेस्ट घोषणा सुनिए"
+      },
+      "st_upload": {
+        "en": "Upload documents",
+        "hinglish": "Documents bhejiye",
+        "hi": "दस्तावेज़ भेजिए"
+      },
+      "st_review": {
+        "en": "KYC review",
+        "hinglish": "KYC review",
+        "hi": "KYC जाँच"
+      },
+      "st_release": {
+        "en": "Settlement released",
+        "hinglish": "Settlement chhoota",
+        "hi": "सेटलमेंट जारी"
+      },
+      "h_upi": {
+        "en": "UPI · in your bank",
+        "hinglish": "UPI · bank mein",
+        "hi": "UPI · बैंक में"
+      },
+      "h_card": {
+        "en": "Card/wallet · next day",
+        "hinglish": "Card/wallet · kal",
+        "hi": "कार्ड/वॉलेट · कल"
+      },
+      "a_talk_to_specialist": {
+        "en": "Talk to specialist",
+        "hinglish": "Specialist se baat",
+        "hi": "विशेषज्ञ से बात"
+      },
+      "a_add_txn_id": {
+        "en": "Add transaction ID",
+        "hinglish": "Transaction ID daalein",
+        "hi": "ट्रांज़ैक्शन ID डालें"
+      },
+      "a_upload_kyc": {
+        "en": "Upload KYC docs",
+        "hinglish": "KYC documents bhejein",
+        "hi": "KYC दस्तावेज़ भेजें"
+      },
+      "a_track": {
+        "en": "Track",
+        "hinglish": "Track karein",
+        "hi": "ट्रैक करें"
+      },
+      "a_play_test": {
+        "en": "Play test announcement",
+        "hinglish": "Test announcement chalayein",
+        "hi": "टेस्ट घोषणा चलाएँ"
+      },
+      "m_talk_to_specialist": {
+        "en": "I want to talk to a specialist",
+        "hinglish": "Mujhe specialist se baat karni hai",
+        "hi": "मुझे विशेषज्ञ से बात करनी है"
+      }
+    },
+    "outcomes": {
+      "PAYMENT_RECOVERED": {
+        "type": "payment_recovered",
+        "status": "success",
+        "title": "t_payment_recovered",
+        "refs": [
+          [
+            "l_txn",
+            "txn_id"
+          ]
+        ],
+        "rows": [
+          [
+            "l_credited_to",
+            "@v_next_settlement"
+          ]
+        ],
+        "actions": [
+          "track"
+        ]
+      },
+      "PAYMENT_AUTO_REVERSAL": {
+        "type": "payment_reversal",
+        "status": "info",
+        "title": "t_payment_reversal",
+        "refs": [
+          [
+            "l_txn",
+            "txn_id"
+          ]
+        ],
+        "rows": [
+          [
+            "l_arrives",
+            "@v_1day"
+          ]
+        ]
+      },
+      "PAYMENT_NOT_DEBITED": {
+        "type": "payment_reversal",
+        "status": "info",
+        "title": "t_not_debited",
+        "refs": [
+          [
+            "l_txn",
+            "txn_id"
+          ]
+        ]
+      },
+      "SETTLEMENT_RETRIED": {
+        "type": "settlement_resent",
+        "status": "success",
+        "title": "t_settlement_resent",
+        "refs": [
+          [
+            "l_settlement",
+            "settlement_id"
+          ],
+          [
+            "l_utr",
+            "utr"
+          ],
+          [
+            "l_ticket",
+            "ticket_ref"
+          ]
+        ],
+        "rows": [
+          [
+            "l_bank",
+            "bank"
+          ],
+          [
+            "l_arrives",
+            "@v_2h"
+          ]
+        ],
+        "steps": [
+          [
+            "st_held",
+            "done"
+          ],
+          [
+            "st_resent",
+            "done"
+          ],
+          [
+            "st_arriving",
+            "current"
+          ]
+        ],
+        "actions": [
+          "track"
+        ]
+      },
+      "SETTLEMENT_PROCESSING": {
+        "type": "settlement_resent",
+        "status": "pending",
+        "title": "t_settlement_processing",
+        "refs": [
+          [
+            "l_settlement",
+            "settlement_id"
+          ],
+          [
+            "l_utr",
+            "utr"
+          ]
+        ],
+        "rows": [
+          [
+            "l_bank",
+            "bank"
+          ]
+        ],
+        "steps": [
+          [
+            "st_held",
+            "done"
+          ],
+          [
+            "st_resent",
+            "done"
+          ],
+          [
+            "st_arriving",
+            "current"
+          ]
+        ],
+        "actions": [
+          "track"
+        ]
+      },
+      "SETTLEMENT_ON_TIME": {
+        "type": "settlement_resent",
+        "status": "success",
+        "title": "t_settlement_done",
+        "refs": [
+          [
+            "l_settlement",
+            "settlement_id"
+          ],
+          [
+            "l_utr",
+            "utr"
+          ]
+        ],
+        "rows": [
+          [
+            "l_bank",
+            "bank"
+          ]
+        ]
+      },
+      "SETTLEMENT_KYC_HOLD": {
+        "type": "settlement_kyc_hold",
+        "status": "held",
+        "title": "t_kyc_hold",
+        "refs": [
+          [
+            "l_settlement",
+            "settlement_id"
+          ],
+          [
+            "l_ticket",
+            "ticket_ref"
+          ]
+        ],
+        "rows": [
+          [
+            "l_docs",
+            "docs"
+          ]
+        ],
+        "steps": [
+          [
+            "st_upload",
+            "current"
+          ],
+          [
+            "st_review",
+            "todo"
+          ],
+          [
+            "st_release",
+            "todo"
+          ]
+        ],
+        "actions": [
+          "upload_kyc"
+        ]
+      },
+      "KYC_GUIDANCE": {
+        "type": "faq",
+        "status": "held",
+        "title": "t_kyc_pending",
+        "amount": false,
+        "rows": [
+          [
+            "l_docs",
+            "docs"
+          ]
+        ],
+        "actions": [
+          "upload_kyc"
+        ]
+      },
+      "KYC_VERIFIED": {
+        "type": "faq",
+        "status": "success",
+        "title": "t_kyc_ok",
+        "amount": false
+      },
+      "REFUND_REINITIATED": {
+        "type": "refund_status",
+        "status": "success",
+        "title": "t_refund_resent",
+        "refs": [
+          [
+            "l_refund",
+            "refund_id"
+          ],
+          [
+            "l_ref",
+            "ref"
+          ]
+        ],
+        "rows": [
+          [
+            "l_sent_to",
+            "@v_customer_source"
+          ],
+          [
+            "l_arrives",
+            "@v_1day"
+          ]
+        ],
+        "actions": [
+          "track"
+        ]
+      },
+      "REFUND_IN_PROGRESS": {
+        "type": "refund_status",
+        "status": "pending",
+        "title": "t_refund_progress",
+        "refs": [
+          [
+            "l_refund",
+            "refund_id"
+          ]
+        ],
+        "rows": [
+          [
+            "l_arrives",
+            "eta"
+          ]
+        ]
+      },
+      "REFUND_DONE": {
+        "type": "refund_status",
+        "status": "success",
+        "title": "t_refund_done",
+        "refs": [
+          [
+            "l_refund",
+            "refund_id"
+          ],
+          [
+            "l_arn",
+            "arn"
+          ]
+        ]
+      },
+      "REFUND_NEEDS_APPROVAL": {
+        "type": "refund_held",
+        "status": "held",
+        "title": "t_refund_held",
+        "refs": [
+          [
+            "l_refund",
+            "refund_id"
+          ]
+        ],
+        "rows": [
+          [
+            "l_reason",
+            "reason"
+          ],
+          [
+            "l_why",
+            "@v_above_limit"
+          ]
+        ],
+        "actions": [
+          "talk_to_specialist"
+        ]
+      },
+      "COUNCIL_HOLD": {
+        "type": "council_hold",
+        "status": "held",
+        "title": "t_council_hold",
+        "refs": [
+          [
+            "l_txn",
+            "txn_id"
+          ],
+          [
+            "l_refund",
+            "refund_id"
+          ],
+          [
+            "l_settlement",
+            "settlement_id"
+          ]
+        ],
+        "actions": [
+          "talk_to_specialist"
+        ]
+      },
+      "MONEY_NEEDS_APPROVAL": {
+        "type": "handoff",
+        "status": "held",
+        "title": "t_money_held",
+        "refs": [
+          [
+            "l_txn",
+            "txn_id"
+          ],
+          [
+            "l_settlement",
+            "settlement_id"
+          ]
+        ],
+        "rows": [
+          [
+            "l_why",
+            "@v_above_limit"
+          ]
+        ],
+        "actions": [
+          "talk_to_specialist"
+        ]
+      },
+      "AUTONOMY_HOLD": {
+        "type": "handoff",
+        "status": "held",
+        "title": "t_money_held",
+        "refs": [
+          [
+            "l_txn",
+            "txn_id"
+          ],
+          [
+            "l_refund",
+            "refund_id"
+          ],
+          [
+            "l_settlement",
+            "settlement_id"
+          ]
+        ],
+        "rows": [
+          [
+            "l_why",
+            "@v_autonomy"
+          ]
+        ],
+        "actions": [
+          "talk_to_specialist"
+        ]
+      },
+      "SOUNDBOX_FIXED": {
+        "type": "soundbox_status",
+        "status": "success",
+        "title": "t_soundbox_fixed",
+        "amount": false,
+        "refs": [
+          [
+            "l_device",
+            "device_id"
+          ]
+        ],
+        "actions": [
+          "play_test"
+        ]
+      },
+      "SOUNDBOX_VOLUME_GUIDE": {
+        "type": "soundbox_status",
+        "status": "held",
+        "title": "t_soundbox_guide",
+        "amount": false,
+        "refs": [
+          [
+            "l_device",
+            "device_id"
+          ]
+        ],
+        "steps": [
+          [
+            "st_press_plus",
+            "current"
+          ],
+          [
+            "st_test",
+            "todo"
+          ]
+        ],
+        "actions": [
+          "play_test"
+        ]
+      },
+      "SOUNDBOX_OK": {
+        "type": "soundbox_status",
+        "status": "success",
+        "title": "t_soundbox_ok",
+        "amount": false,
+        "refs": [
+          [
+            "l_device",
+            "device_id"
+          ]
+        ],
+        "actions": [
+          "play_test"
+        ]
+      },
+      "SOUNDBOX_LANGUAGE_SET": {
+        "type": "soundbox_status",
+        "status": "success",
+        "title": "t_soundbox_language",
+        "amount": false,
+        "refs": [
+          [
+            "l_device",
+            "device_id"
+          ]
+        ],
+        "rows": [
+          [
+            "l_language",
+            "language"
+          ]
+        ],
+        "actions": [
+          "play_test"
+        ]
+      },
+      "SOUNDBOX_REPLACEMENT": {
+        "type": "soundbox_status",
+        "status": "held",
+        "title": "t_soundbox_replace",
+        "amount": false,
+        "refs": [
+          [
+            "l_device",
+            "device_id"
+          ],
+          [
+            "l_ticket",
+            "ticket_ref"
+          ]
+        ],
+        "actions": [
+          "track"
+        ]
+      },
+      "LOW_CONFIDENCE": {
+        "type": "handoff",
+        "status": "pending",
+        "title": "t_handoff",
+        "amount": false,
+        "actions": [
+          "add_txn_id"
+        ]
+      },
+      "HUMAN_HANDOFF": {
+        "type": "handoff",
+        "status": "pending",
+        "title": "t_handoff",
+        "amount": false
+      },
+      "PAYMENT_NOT_FOUND": {
+        "type": "faq",
+        "status": "info",
+        "title": "t_need_info",
+        "amount": false,
+        "actions": [
+          "add_txn_id",
+          "talk_to_specialist"
+        ]
+      },
+      "REFUND_NOT_FOUND": {
+        "type": "faq",
+        "status": "info",
+        "title": "t_need_info",
+        "amount": false,
+        "actions": [
+          "add_txn_id",
+          "talk_to_specialist"
+        ]
+      },
+      "FAQ_ANSWER": {
+        "type": "faq",
+        "status": "info",
+        "title": "t_answer",
+        "amount": false,
+        "refs": [
+          [
+            "l_source",
+            "source"
+          ]
+        ]
+      },
+      "GENERIC_RESOLVED": {
+        "type": "faq",
+        "status": "success",
+        "title": "t_answer",
+        "amount": false
+      },
+      "FOLLOWUP_APPROVED": {
+        "type": "handoff",
+        "status": "success",
+        "title": "t_specialist_approved",
+        "refs": [
+          [
+            "l_ref",
+            "ref"
+          ]
+        ],
+        "rows": [
+          [
+            "l_specialist",
+            "specialist"
+          ]
+        ]
+      },
+      "FOLLOWUP_DECLINED": {
+        "type": "handoff",
+        "status": "info",
+        "title": "t_specialist_declined",
+        "amount": false,
+        "rows": [
+          [
+            "l_specialist",
+            "specialist"
+          ],
+          [
+            "l_note",
+            "note"
+          ]
+        ],
+        "actions": [
+          "talk_to_specialist"
+        ]
+      },
+      "HISAAB": {
+        "type": "hisaab",
+        "status": "info",
+        "title": "t_hisaab",
+        "amount": false
+      },
+      "_default": {
+        "type": "faq",
+        "status": "info",
+        "title": "t_answer",
+        "amount": false
+      }
+    }
   }
 }

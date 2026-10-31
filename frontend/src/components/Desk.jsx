@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Icon, STATUS, INTENT_LABEL, fmtMs, fmtTime } from './ui.jsx'
-import { inr } from '../engine/core.js'
+import { inr, TPL } from '../engine/core.js'
 
 export const SUGGEST = {
   M1001: [
@@ -31,9 +31,58 @@ export const GREETING = {
 const LANG_TAG = { hinglish: 'Hinglish', en: 'English', hi: 'हिन्दी' }
 const isDeva = (t) => /[ऀ-ॿ]/.test(t || '')
 
+// ====================================================================== rich reply card (generative UI, built from facts)
+const STATUS_ICON = {
+  success: () => <Icon.ok />,
+  held: () => <Icon.hold />,
+  pending: () => <Icon.hold />,
+  info: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>,
+}
+
+export function ReplyCard({ card, onAction }) {
+  const Ic = STATUS_ICON[card.status] || STATUS_ICON.info
+  const total = (card.bars || []).reduce((a, b) => a + b.value, 0)
+  return (
+    <div className={`rcard ${card.status}`} data-type={card.type}>
+      <div className="rcard-top">
+        <span className="rcard-title">{card.title}</span>
+        <span className={`rcard-chip ${card.status}`}><Ic />{card.status_label}</span>
+      </div>
+      {card.amount && <div className="rcard-amount num">{card.amount}</div>}
+      {card.bars && (
+        <div className="rcard-bars">
+          <div className="rcard-bar" role="img" aria-label={card.bars.map((b) => `${b.label} ${b.amount}`).join(', ')}>
+            {card.bars.map((b) => <span key={b.kind} className={b.kind} style={{ flexGrow: total ? b.value : 1 }} />)}
+          </div>
+          <div className="rcard-legend">
+            {card.bars.map((b) => <span key={b.kind}><i className={b.kind} />{b.label}<b className="num">{b.amount}</b></span>)}
+          </div>
+        </div>
+      )}
+      {card.steps?.length > 0 && (
+        <ol className={`rcard-steps n${card.steps.length}`}>
+          {card.steps.map((st, i) => <li key={i} className={st.state}><span className="dot" />{st.label}</li>)}
+        </ol>
+      )}
+      {(card.refs.length > 0 || card.rows.length > 0) && (
+        <dl className="rcard-kv">
+          {card.refs.map((r, i) => <div key={`r${i}`}><dt>{r.label}</dt><dd className="mono">{r.value}</dd></div>)}
+          {card.rows.map((r, i) => <div key={`w${i}`}><dt>{r.label}</dt><dd className={r.vote ? `vote ${r.vote}` : ''}>{r.value}</dd></div>)}
+        </dl>
+      )}
+      {card.actions?.length > 0 && (
+        <div className="rcard-actions">
+          {card.actions.map((a, i) => <button key={a.action} type="button" className={i === 0 ? 'primary' : ''} onClick={() => onAction(a.action, card)}>{a.label}</button>)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ====================================================================== phone
-export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, busyLabel, onSend, onCheckin, onHisaab, voice, onVoice, canMic }) {
+export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, busyLabel, onSend, onCheckin, onHisaab, onToast, voice, onVoice, canMic }) {
   const [text, setText] = useState('')
+  const inputRef = useRef(null)
   const [listening, setListening] = useState(false)
   const chatRef = useRef(null)
   const m = merchants.find((x) => x.id === merchantId)
@@ -47,6 +96,25 @@ export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, b
     if (!v || busy) return
     onSend(v)
     setText('')
+  }
+  // Card buttons do real things: send a message, focus the input, speak, or confirm with a toast.
+  const cardAction = (action, card) => {
+    const lang = m?.lang || 'en'
+    if (action === 'talk_to_specialist') submit(TPL.cards.labels.m_talk_to_specialist[lang])
+    else if (action === 'add_txn_id') { setText('Txn ID: '); setTimeout(() => inputRef.current?.focus(), 0) }
+    else if (action === 'upload_kyc') onToast?.('KYC upload opens in the Paytm for Business app (demo)')
+    else if (action === 'track') {
+      const ref = card.refs.find((r) => /UTR|Ticket|टिकट|Ref|Txn/.test(r.label)) || card.refs[0]
+      onToast?.(`Tracking ${ref ? `${ref.label} ${ref.value}` : card.title}: you'll get an update here`)
+    } else if (action === 'play_test') {
+      try {
+        speechSynthesis.cancel()
+        const u = new SpeechSynthesisUtterance('₹1 received on PayMates')
+        u.lang = 'en-IN'
+        speechSynthesis.speak(u)
+        onToast?.('Playing a test announcement: "₹1 received on PayMates"')
+      } catch { onToast?.('This browser cannot play the test announcement') }
+    }
   }
   const listen = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -96,7 +164,10 @@ export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, b
                 {msg.role === 'human' && <div className="bubble-meta"><span className="avatar human" style={{ width: 18, height: 18, fontSize: 10, borderRadius: 6 }}>{msg.from?.[0] || 'S'}</span>{msg.from} · Specialist</div>}
                 {msg.proactive && <div className="bubble-meta"><span className="chip noticed"><Icon.watcher />PayMates noticed</span></div>}
                 {msg.hisaab && <div className="bubble-meta"><span className="chip hisaab">₹ Today's hisaab</span></div>}
-                <div className={`bubble ${msg.role === 'merchant' ? 'me' : msg.role === 'human' ? 'human' : 'bot'}`} lang={isDeva(msg.text) ? 'hi' : undefined}>{msg.text}</div>
+                <div className={`bubble ${msg.role === 'merchant' ? 'me' : msg.role === 'human' ? 'human' : 'bot'}${msg.card ? ' has-card' : ''}`} lang={isDeva(msg.text) ? 'hi' : undefined}>
+                  {msg.card && <ReplyCard card={msg.card} onAction={cardAction} />}
+                  {msg.text}
+                </div>
                 {msg.role === 'bot' && msg.ticket && (
                   <div className="bubble-meta">
                     <span className={`chip ${STATUS[msg.ticket.status]?.cls || ''}`} style={{ padding: '0 7px', fontSize: 11 }}>{STATUS[msg.ticket.status]?.short}</span>
@@ -126,7 +197,7 @@ export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, b
           </div>
           <form className="composer" onSubmit={(e) => { e.preventDefault(); submit() }}>
             <label htmlFor="composer" className="sr-only" style={{ position: 'absolute', left: -9999 }}>Message</label>
-            <input id="composer" value={text} onChange={(e) => setText(e.target.value)} placeholder={m?.lang === 'hi' ? 'अपनी समस्या लिखें…' : m?.lang === 'hinglish' ? 'Apni problem likhiye…' : 'Describe your issue…'} disabled={busy} />
+            <input id="composer" ref={inputRef} value={text} onChange={(e) => setText(e.target.value)} placeholder={m?.lang === 'hi' ? 'अपनी समस्या लिखें…' : m?.lang === 'hinglish' ? 'Apni problem likhiye…' : 'Describe your issue…'} disabled={busy} />
             {canMic && (
               <button type="button" className="icon-btn" onClick={listen} aria-pressed={listening} aria-label="Speak your message" title="Speak">
                 <Icon.mic />

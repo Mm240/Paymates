@@ -5,7 +5,7 @@ import random
 import statistics
 from typing import Awaitable, Callable, Optional
 
-from . import council
+from . import cards, council
 from .config import LEXICON, POLICY, TEMPLATES
 from .store import Store, now_ms
 from .text import inr, render
@@ -62,6 +62,7 @@ async def decide(store: Store, esc_id: str, approve: bool, specialist: str, note
     mid = esc["merchant_id"]
     proposed = esc["proposed_action"]
     recovered = 0
+    card_facts: dict = {"specialist": specialist, "note": note}
     if approve:
         ref = esc_id
         tool = proposed["tool"] if proposed else "none"
@@ -79,6 +80,8 @@ async def decide(store: Store, esc_id: str, approve: bool, specialist: str, note
                 amount = store.transaction(proposed["args"]["txn_id"])["amount"]
             elif proposed["tool"] == "retry_settlement":
                 amount = store.settlement(proposed["args"]["settlement_id"])["amount"]
+            card_facts.update(proposed["args"], amount=inr(amount), ref=res.get("new_reference"), utr=res.get("new_utr"),
+                              bank=store.merchant(mid)["bank"])
         done = TEMPLATES["action_done"].get(tool, TEMPLATES["action_done"]["none"])[lang].format(amount=inr(amount))
         if note:
             done = f"{done} {note}"
@@ -90,6 +93,12 @@ async def decide(store: Store, esc_id: str, approve: bool, specialist: str, note
         text = render("REJECTED_FOLLOWUP", lang, {"specialist": specialist, "note": note or ""}).replace("  ", " ")
         store.update("escalations", esc_id, {"status": "REJECTED", "decided_at": now_ms(), "decided_by": specialist, "note": note})
         store.update("tickets", ticket["id"], {"status": "HUMAN_FOLLOWUP"})
+    # The follow-up card shows what the specialist's decision actually did.
+    after = {"mark_payment_recovered": "PAYMENT_RECOVERED", "retry_settlement": "SETTLEMENT_RETRIED",
+             "reinitiate_refund": "REFUND_REINITIATED"}.get(proposed["tool"] if proposed else "", "FOLLOWUP_APPROVED")
+    card = cards.build(after if approve else "FOLLOWUP_DECLINED", card_facts, lang)
+    if approve:
+        card["rows"].append({"label": cards.label("l_specialist", lang), "value": specialist})
     store.audit(ticket["id"], f"human:{specialist}", "approve" if approve else "reject", {"escalation": esc_id, "note": note})
     # Remember the call so the next similar case shows it in its briefing.
     store.insert("decisions", {"id": store.next_id("dec", "DEC-"), "esc_id": esc_id, "merchant_id": mid, "intent": ticket["intent"],
@@ -98,7 +107,7 @@ async def decide(store: Store, esc_id: str, approve: bool, specialist: str, note
                                "specialist": specialist, "note": note, "decided_at": now_ms()})
     store.add_message(mid, "assistant", text, ticket["id"])
     return {"escalation": store.escalation(esc_id), "ticket": store.ticket(ticket["id"]),
-            "followup": {"merchant_id": mid, "ticket_id": ticket["id"], "text": text, "from": specialist}}
+            "followup": {"merchant_id": mid, "ticket_id": ticket["id"], "text": text, "from": specialist, "card": card}}
 
 
 # ====================================================================== simulator

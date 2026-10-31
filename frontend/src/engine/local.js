@@ -815,6 +815,43 @@ async function respond(outcome, facts, lang, text) {
   } catch { return [draft, `templates (fallback from ${m.label})`, true] }
 }
 
+// ====================================================================== rich reply cards (mirrors backend/app/cards.py)
+// Built from the outcome and its facts, never generated. Layouts live in shared/templates.json ("cards").
+const CARD = TPL.cards
+const EMPTY = new Set([null, undefined, '', '-'])
+export const cardLabel = (key, lang) => { const t = CARD.labels[key]; return t ? t[lang] || t.en : key }
+export function buildCard(outcome, facts, lang, mid = null, extra = {}) {
+  const spec = CARD.outcomes[outcome] || CARD.outcomes._default
+  const val = (src) => (src.startsWith('@') ? cardLabel(src.slice(1), lang) : facts[src])
+  const pairs = (items = []) => items.map(([k, src]) => ({ label: cardLabel(k, lang), value: val(src) })).filter((x) => !EMPTY.has(x.value))
+  const card = {
+    type: spec.type, status: spec.status, status_label: cardLabel(`s_${spec.status}`, lang), title: cardLabel(spec.title, lang),
+    amount: spec.amount !== false && !EMPTY.has(facts.amount) ? facts.amount : null,
+    refs: pairs(spec.refs), rows: pairs(spec.rows),
+    steps: (spec.steps || []).map(([k, state]) => ({ label: cardLabel(k, lang), state })),
+    actions: (spec.actions || []).map((a) => ({ label: cardLabel(`a_${a}`, lang), action: a })).slice(0, 2),
+  }
+  if (extra.escalation_id) card.refs.push({ label: cardLabel('l_case', lang), value: extra.escalation_id })
+  if (spec.type === 'council_hold' && extra.votes) card.rows.push(...extra.votes.map((v) => ({ label: v.seat, value: cardLabel(`v_${v.vote}`, lang), vote: v.vote })))
+  if (spec.type === 'soundbox_status' && mid) {
+    const sb = S.merchants.get(mid).soundbox
+    card.rows = [
+      { label: cardLabel('l_online', lang), value: cardLabel(sb.online ? 'v_yes' : 'v_no', lang) },
+      { label: cardLabel('l_signal', lang), value: sb.signal },
+      { label: cardLabel('l_battery', lang), value: sb.battery != null ? `${sb.battery}%` : null },
+      { label: cardLabel('l_volume', lang), value: `${sb.volume}%` },
+      ...card.rows,
+    ].filter((r) => !EMPTY.has(r.value))
+  }
+  return card
+}
+function hisaabCard(lang, upi, cardAmt, items) {
+  const card = buildCard('HISAAB', {}, lang)
+  card.bars = [{ label: cardLabel('h_upi', lang), amount: inr(upi), value: upi, kind: 'upi' }, { label: cardLabel('h_card', lang), amount: inr(cardAmt), value: cardAmt, kind: 'card' }]
+  if (items.length) Object.assign(card, { rows: items.map((value) => ({ label: cardLabel('l_fixed_today', lang), value })), status: 'success', status_label: cardLabel('s_success', lang) })
+  return card
+}
+
 // ====================================================================== orchestrator
 export async function handleMessage(mid, text, emit = async () => {}, { source = 'live', pacing = 450, watch = null } = {}) {
   const merchant = S.merchants.get(mid)
@@ -928,14 +965,16 @@ export async function handleMessage(mid, text, emit = async () => {}, { source =
   await step('responder', 'done', `Reply in ${LANG_LABEL[tri.language]}`, { model: models.responder, ms: ms(t0), data: { grounded } })
   if (watch) reply = `${render(watch.intro, tri.language, { ...base, ...watch.facts })}\n\n${reply}`
   S.messages.push({ merchant_id: mid, role: 'assistant', text: reply, ts: now(), ticket_id: ticketId })
-  await emit({ type: 'reply', text: reply, lang: tri.language, ticket_id: ticketId })
+  const held = run.sessions.filter((x) => !x.approved)
+  const card = buildCard(a.outcome, a.facts, tri.language, mid, { escalation_id: escalation?.id, votes: held.length ? held[held.length - 1].votes : null })
+  await emit({ type: 'reply', text: reply, lang: tri.language, ticket_id: ticketId, card })
 
   const status = { RESOLVED_AI: 'RESOLVED_AI', ESCALATE: 'ESCALATED', NEEDS_INFO: 'NEEDS_INFO' }[a.status]
   Object.assign(ticket, { lang: tri.language, intent: tri.intent, confidence: tri.confidence, status, outcome: a.outcome, summary: a.summary, reply,
     duration_ms: Math.max(0, Math.round(performance.now() - started - paced)), resolved_at: status === 'RESOLVED_AI' ? now() : null,
-    recovered_amount: run.recovered, models, facts: Object.fromEntries(Object.entries(a.facts).filter(([, v]) => ['string', 'number'].includes(typeof v))) })
+    recovered_amount: run.recovered, models, card, facts: Object.fromEntries(Object.entries(a.facts).filter(([, v]) => ['string', 'number'].includes(typeof v))) })
   audit(ticketId, 'orchestrator', 'close', { status, outcome: a.outcome, duration_ms: ticket.duration_ms })
-  await emit({ type: 'done', ticket: clone(ticket), escalation: escalation && clone(escalation) })
+  await emit({ type: 'done', ticket: clone(ticket), escalation: escalation && clone(escalation), card: clone(card) })
   return clone(ticket)
 }
 
@@ -985,7 +1024,7 @@ export async function checkin(mid, emit = async () => {}, { pacing = 450 } = {})
   }
   audit(null, 'watcher', 'checkin', { merchant: mid, found: findings.length })
   const summary = sendHisaab(mid) // end every check-in with the day's hisaab
-  const result = { merchant_id: mid, found: findings.length, tickets, message, hisaab: summary.text }
+  const result = { merchant_id: mid, found: findings.length, tickets, message, hisaab: summary.text, hisaab_card: summary.card }
   await emit({ type: 'checkin_done', ...result })
   return result
 }
@@ -1004,7 +1043,7 @@ export function computeHisaab(mid) {
   const items = done.map((t) => phrase(`hisaab_${t.outcome}`, lang, { amount: t.facts?.amount || '' }))
   const fixed = items.length ? phrase('hisaab_fixed', lang, { items: items.join(phrase('list_sep', lang)) }) : phrase('hisaab_none', lang)
   const text = render('HISAAB', lang, { owner_first: m.owner.split(' ')[0], upi: inr(upi), card: inr(card), fixed })
-  return { merchant_id: mid, upi_received: upi, card_pending: card, fixed: done.map((t) => t.id), text }
+  return { merchant_id: mid, upi_received: upi, card_pending: card, fixed: done.map((t) => t.id), text, card: hisaabCard(lang, upi, card, items) }
 }
 export function sendHisaab(mid) {
   const out = computeHisaab(mid)
@@ -1041,11 +1080,12 @@ export async function decide(escId, approve, specialist, note = '') {
   const p = esc.proposed_action
   let text
   if (approve) {
-    let ref = escId, amount = null, recovered = 0
+    let ref = escId, amount = null, recovered = 0, res = {}
     if (p) {
       const run = new ToolRunner(esc.merchant_id, ticket.id, async () => {}, `human:${specialist}`)
       const r = await run.run(p.tool, p.args, specialist)
       if (r.blocked || r.error) throw new Error(`Approved action could not run: ${r.reason || r.error}`)
+      res = r
       ref = r.new_reference || r.new_utr || r.txn_id || escId
       recovered = run.recovered
       amount = p.tool === 'reinitiate_refund' ? S.refunds.get(p.args.refund_id).amount
@@ -1062,12 +1102,21 @@ export async function decide(escId, approve, specialist, note = '') {
     Object.assign(esc, { status: 'REJECTED', decided_at: now(), decided_by: specialist, note })
     ticket.status = 'HUMAN_FOLLOWUP'
   }
+  // The follow-up card shows what the specialist's decision actually did.
+  const cardFacts = { specialist, note }
+  if (approve && p) {
+    Object.assign(cardFacts, p.args, { amount: amountOf(p.tool, p.args) ? inr(amountOf(p.tool, p.args)) : null, ref: res.new_reference, utr: res.new_utr,
+      bank: S.merchants.get(esc.merchant_id).bank })
+  }
+  const after = { mark_payment_recovered: 'PAYMENT_RECOVERED', retry_settlement: 'SETTLEMENT_RETRIED', reinitiate_refund: 'REFUND_REINITIATED' }[p?.tool] || 'FOLLOWUP_APPROVED'
+  const card = buildCard(approve ? after : 'FOLLOWUP_DECLINED', cardFacts, lang)
+  if (approve) card.rows.push({ label: cardLabel('l_specialist', lang), value: specialist })
   audit(ticket.id, `human:${specialist}`, approve ? 'approve' : 'reject', { escalation: escId, note })
   // Remember the call so the next similar case shows it in its briefing.
   S.decisions.push({ id: nextId('dec', 'DEC-'), esc_id: escId, merchant_id: esc.merchant_id, intent: ticket.intent, amount: p ? amountOf(p.tool, p.args) : 0,
     tool: p ? p.tool : null, decision: approve ? 'APPROVED' : 'DECLINED', specialist, note, decided_at: now() })
   S.messages.push({ merchant_id: esc.merchant_id, role: 'assistant', text, ts: now(), ticket_id: ticket.id })
-  return { escalation: clone(esc), ticket: clone(ticket), followup: { merchant_id: esc.merchant_id, ticket_id: ticket.id, text, from: specialist }, metrics: metrics() }
+  return { escalation: clone(esc), ticket: clone(ticket), followup: { merchant_id: esc.merchant_id, ticket_id: ticket.id, text, from: specialist, card }, metrics: metrics() }
 }
 
 const SIM_WEIGHTS = { FAILED_PAYMENT: 5, SETTLEMENT_DELAY: 4, REFUND_ISSUE: 4, SOUNDBOX: 3, KYC: 2, GENERAL: 3, HUMAN_REQUEST: 1, UNCLEAR: 1 }

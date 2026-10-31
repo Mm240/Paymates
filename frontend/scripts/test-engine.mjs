@@ -60,6 +60,37 @@ await test('demo 3: refund over limit -> REFUND_NEEDS_APPROVAL', async () => {
   assert.equal(t.status, 'ESCALATED')
 })
 
+// Rich reply cards: same type and amounts as the backend.
+await test('cards: demos 1-3 give payment_recovered / settlement_resent / refund_held', async () => {
+  await fresh()
+  const t1 = await chat('M1001', "Customer's payment failed but money was deducted.")
+  assert.deepEqual([t1.card.type, t1.card.status, t1.card.amount], ['payment_recovered', 'success', '₹1,250'])
+  const t2 = await chat('M1001', 'Kal ka settlement nahi aaya')
+  assert.deepEqual([t2.card.type, t2.card.amount, t2.card.steps.map((x) => x.state).join()], ['settlement_resent', '₹18,640', 'done,done,current'])
+  const t3 = await chat('M1002', 'Customer says refund not received.')
+  assert.deepEqual([t3.card.type, t3.card.status, t3.card.amount, t3.card.actions[0].action], ['refund_held', 'held', '₹7,800', 'talk_to_specialist'])
+})
+
+await test('cards: check-in on Gupta Medicals + hisaab', async () => {
+  await fresh()
+  const out = await E.checkin('M1003', async () => {}, { pacing: 0 })
+  const by = Object.fromEntries(out.tickets.map((t) => [t.subject, t.card]))
+  assert.deepEqual([by.T88340299.type, by.T88340299.amount], ['payment_recovered', '₹860'])
+  assert.deepEqual([by.T88340266.type, by.T88340266.amount], ['council_hold', '₹3,400'])
+  assert.ok(by.T88340266.rows.some((r) => r.vote === 'HOLD'))
+  assert.deepEqual([by.S2610302.type, by.S2610302.amount], ['settlement_kyc_hold', '₹9,415'])
+  assert.equal(by['SB-41890'].title, 'साउंडबॉक्स म्यूट है')
+  assert.deepEqual(out.hisaab_card.bars.map((b) => b.value), [740, 1180])
+})
+
+await test('cards: specialist follow-up after approving demo 3', async () => {
+  await fresh()
+  await chat('M1002', 'Customer says refund not received.')
+  const esc = (await E.localEngine.escalations())[0]
+  const out = await E.decide(esc.id, true, 'Priya (Support)')
+  assert.deepEqual([out.followup.card.type, out.followup.card.amount], ['refund_status', '₹7,800'])
+})
+
 await vite.close()
 for (const [s, n, m] of results) console.log(`${s === 'ok' ? '  ok  ' : '  FAIL'} ${n}${m ? `\n        ${m}` : ''}`)
 const failed = results.filter((r) => r[0] !== 'ok').length

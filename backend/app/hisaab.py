@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+from . import cards
 from .store import Store, now_ms
 from .text import inr, phrase, render
 
@@ -26,7 +27,8 @@ def compute(store: Store, mid: str) -> dict:
     items = [phrase(f"hisaab_{t['outcome']}", lang, amount=(t["facts"] or {}).get("amount", "")) for t in done]
     fixed = phrase("hisaab_fixed", lang, items=phrase("list_sep", lang).join(items)) if items else phrase("hisaab_none", lang)
     text = render("HISAAB", lang, {"owner_first": m["owner"].split()[0], "upi": inr(upi), "card": inr(card), "fixed": fixed})
-    return {"merchant_id": mid, "upi_received": upi, "card_pending": card, "fixed": [t["id"] for t in done], "text": text}
+    return {"merchant_id": mid, "upi_received": upi, "card_pending": card, "fixed": [t["id"] for t in done], "text": text,
+            "card": cards.hisaab_card(lang, upi, card, inr(upi), inr(card), items)}
 
 
 def send(store: Store, mid: str) -> dict:

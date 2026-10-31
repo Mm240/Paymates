@@ -123,11 +123,11 @@ export default function App() {
     else if (ev.type === 'reply') setTrace((t) => ({ ...t, reply: ev.text }))
     else if (ev.type === 'done') {
       setTrace((t) => ({ ...t, ticket: ev.ticket }))
-      addMsg(mid, { role: 'bot', text: ev.ticket.reply, ticket: ev.ticket, proactive: ev.ticket.source === 'proactive' })
+      addMsg(mid, { role: 'bot', text: ev.ticket.reply, ticket: ev.ticket, card: ev.card || ev.ticket.card, proactive: ev.ticket.source === 'proactive' })
       speak(ev.ticket.reply, ev.ticket.lang)
     } else if (ev.type === 'checkin_done') {
       if (ev.message) addMsg(mid, { role: 'bot', text: ev.message, proactive: true })
-      if (ev.hisaab) addMsg(mid, { role: 'bot', text: ev.hisaab, hisaab: true })
+      if (ev.hisaab) addMsg(mid, { role: 'bot', text: ev.hisaab, hisaab: true, card: ev.hisaab_card })
       speak([ev.message, ev.hisaab].filter(Boolean).join(' '))
     }
   }
@@ -156,7 +156,7 @@ export default function App() {
     if (!e || busy) return
     try {
       const out = await e.hisaab(mid)
-      addMsg(mid, { role: 'bot', text: out.text, hisaab: true })
+      addMsg(mid, { role: 'bot', text: out.text, hisaab: true, card: out.card })
       speak(out.text)
     } catch (err) { say(`Couldn't build today's hisaab: ${err.message}`) }
   }
@@ -194,7 +194,7 @@ export default function App() {
     setDecidingId(id)
     try {
       const out = await engineRef.current.decide(id, approve, specialist || 'Specialist', note)
-      addMsg(out.followup.merchant_id, { role: 'human', text: out.followup.text, from: (specialist || 'Specialist').split(' ')[0] })
+      addMsg(out.followup.merchant_id, { role: 'human', text: out.followup.text, card: out.followup.card, from: (specialist || 'Specialist').split(' ')[0] })
       speak(out.followup.text, out.ticket.lang)
       say(approve ? `Approved. ${out.ticket.id} is closed and the merchant has been updated.` : 'Declined. The merchant has been told a specialist will call.')
       await refresh()
@@ -283,7 +283,7 @@ export default function App() {
             <MerchantPhone
               merchants={merchants} merchantId={merchantId} onPick={setMerchantId}
               messages={convos[merchantId] || []} busy={busy} busyLabel={busyLabel}
-              onSend={(t) => send(merchantId, t)} onCheckin={() => checkin(merchantId)} onHisaab={() => hisaab(merchantId)} voice={voice} onVoice={() => setVoice((v) => !v)}
+              onSend={(t) => send(merchantId, t)} onCheckin={() => checkin(merchantId)} onHisaab={() => hisaab(merchantId)} onToast={say} voice={voice} onVoice={() => setVoice((v) => !v)}
               canMic={!__ARTIFACT__ && typeof window !== 'undefined' && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)}
             />
             <AgentTrace trace={trace} merchants={merchants} onTry={send} live={live} />
