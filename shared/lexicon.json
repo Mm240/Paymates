@@ -54,5 +54,6 @@
     "UNCLEAR": [
       { "lang": "en", "text": "Something is off with my account, can you look into it?" }
     ]
-  }
+  },
+  "announcement_languages": {"Hindi": {"hi": "हिंदी", "match": ["hindi", "हिंदी", "हिन्दी"]}, "English": {"hi": "अंग्रेज़ी", "match": ["english", "angrezi", "अंग्रेज़ी", "अंग्रेजी", "इंग्लिश"]}, "Tamil": {"hi": "तमिल", "match": ["tamil", "तमिल"]}, "Telugu": {"hi": "तेलुगु", "match": ["telugu", "तेलुगु"]}, "Kannada": {"hi": "कन्नड़", "match": ["kannada", "कन्नड़"]}, "Marathi": {"hi": "मराठी", "match": ["marathi", "मराठी"]}, "Bengali": {"hi": "बंगाली", "match": ["bengali", "bangla", "बंगाली"]}, "Gujarati": {"hi": "गुजराती", "match": ["gujarati", "गुजराती"]}, "Malayalam": {"hi": "मलयालम", "match": ["malayalam", "मलयालम"]}, "Punjabi": {"hi": "पंजाबी", "match": ["punjabi", "पंजाबी"]}}
 }

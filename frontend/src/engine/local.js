@@ -12,6 +12,9 @@ const POLICY = seed.policy
 const LIMIT = POLICY.auto_money_limit
 const RETRYABLE = new Set(POLICY.retryable_hold_reasons)
 const MONEY_TOOLS = new Set(['mark_payment_recovered', 'retry_settlement', 'reinitiate_refund'])
+const DEVICE_TOOLS = new Set(['reconnect_device', 'resend_missed_announcements', 'set_announcement_language', 'play_test_announcement'])
+const SOUNDBOX_LANGUAGES = new Set(Object.keys(LEX.announcement_languages))
+const OFFLINE_LONG_MIN = 6 * 60 // silent this long -> treat as a device that needs a technician
 const now = () => Date.now()
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const clone = (x) => JSON.parse(JSON.stringify(x))
@@ -76,10 +79,11 @@ function check(name, args, mid, approvedBy) {
     if (r.amount > LIMIT && !approvedBy) return verdict(false, 'money-limit', `${inr(r.amount)} is above the ${inr(LIMIT)} autonomous limit`, true)
     return verdict(true, 'money-limit', approvedBy ? `Approved by ${approvedBy}` : `${inr(r.amount)} is within the ${inr(LIMIT)} limit`)
   }
-  if (name === 'update_soundbox_settings') {
-    if (args.volume != null && !(args.volume >= 0 && args.volume <= 100)) return verdict(false, 'value-range', 'Volume must be between 0 and 100')
-    return verdict(true, 'device-settings', 'Device settings change, no money involved')
+  if (name === 'set_announcement_language') {
+    if (!SOUNDBOX_LANGUAGES.has(String(args.language))) return verdict(false, 'value-range', `${args.language} is not a language the Soundbox supports`)
+    return verdict(true, 'device-action', 'Device setting the Soundbox supports remotely; no money involved')
   }
+  if (DEVICE_TOOLS.has(name)) return verdict(true, 'device-action', 'Remote device action; no money involved')
   return verdict(true, 'read-or-low-risk', 'Read-only or low-risk action')
 }
 
@@ -140,19 +144,35 @@ const IMPL = {
     const sb = S.merchants.get(mid).soundbox
     const issues = []
     if (sb.fault) issues.push('hardware_fault')
-    if (!sb.online) issues.push('offline')
+    if (!sb.online) issues.push((sb.last_ping_minutes || 0) > OFFLINE_LONG_MIN ? 'offline_long' : 'offline')
     if (!sb.volume) issues.push('volume_zero')
     if (sb.signal === 'weak' && !sb.network_fallback) issues.push('weak_signal_no_fallback')
-    return { device_id: sb.id, model: sb.model, online: sb.online, volume: sb.volume, signal: sb.signal, network_fallback: sb.network_fallback, issues }
+    if ((sb.missed_announcements || 0) > 0) issues.push('missed_announcements')
+    return { device_id: sb.id, model: sb.model, online: sb.online, volume: sb.volume, signal: sb.signal, network_fallback: sb.network_fallback,
+      battery: sb.battery, last_ping_minutes: sb.last_ping_minutes, missed_announcements: sb.missed_announcements || 0, language: sb.language, fault: sb.fault, issues }
   },
-  update_soundbox_settings: (mid, a) => {
+  // Remote device actions: only what a connected Soundbox really allows. Volume is a physical button.
+  reconnect_device: (mid) => {
     const sb = S.merchants.get(mid).soundbox
-    if (a.volume != null) sb.volume = Number(a.volume)
-    if (a.network_fallback != null) {
-      sb.network_fallback = Boolean(a.network_fallback)
-      if (sb.network_fallback && sb.signal === 'weak') sb.signal = 'good (fallback network)'
-    }
-    return { device_id: sb.id, volume: sb.volume, network_fallback: sb.network_fallback, test_announcement: 'played', signal: sb.signal }
+    const switched = sb.signal === 'weak' && !sb.network_fallback
+    if (switched) Object.assign(sb, { network_fallback: true, signal: 'good (backup network)' })
+    Object.assign(sb, { online: true, last_ping_minutes: 0 })
+    return { device_id: sb.id, online: true, signal: sb.signal, switched_to_backup_network: switched }
+  },
+  resend_missed_announcements: (mid) => {
+    const sb = S.merchants.get(mid).soundbox
+    const n = sb.missed_announcements || 0
+    sb.missed_announcements = 0
+    return { device_id: sb.id, replayed: n }
+  },
+  set_announcement_language: (mid, a) => {
+    const sb = S.merchants.get(mid).soundbox
+    sb.language = String(a.language)
+    return { device_id: sb.id, language: sb.language, test_announcement: 'played' }
+  },
+  play_test_announcement: (mid) => {
+    const sb = S.merchants.get(mid).soundbox
+    return { device_id: sb.id, played: true, audible: sb.volume > 0, volume: sb.volume, language: sb.language }
   },
   raise_ticket: (mid, a, ticketId) => {
     const ref = nextId('ops', 'OPS-')
@@ -175,8 +195,11 @@ export const TOOL_DEFS = {
   get_refund: ['read', 'Get one refund by refund ID.', schema({ refund_id: { type: 'string' } }, ['refund_id'])],
   reinitiate_refund: ['write', "Re-send a FAILED refund to the customer's original payment source. Moves money; amounts above the limit need human approval.", schema({ refund_id: { type: 'string' } }, ['refund_id'])],
   get_kyc_status: ['read', 'Get KYC status and any missing documents.', schema()],
-  run_soundbox_diagnostics: ['check', "Run remote diagnostics on the merchant's Soundbox: online, volume, signal, faults.", schema()],
-  update_soundbox_settings: ['write', 'Change Soundbox volume (0-100) and/or turn network fallback on. Plays a test announcement.', schema({ volume: { type: 'integer' }, network_fallback: { type: 'boolean' } })],
+  run_soundbox_diagnostics: ['check', "Run remote diagnostics on the merchant's Soundbox: online, volume, signal, battery, last ping, missed announcements, faults.", schema()],
+  reconnect_device: ['write', 'Re-register the Soundbox on the network; moves it to the backup network if the signal is weak.', schema()],
+  resend_missed_announcements: ['write', 'Re-play payment announcements the Soundbox missed. Only useful when the volume is above 0.', schema()],
+  set_announcement_language: ['write', 'Change the language the Soundbox announces payments in.', schema({ language: { type: 'string', enum: [...SOUNDBOX_LANGUAGES] } }, ['language'])],
+  play_test_announcement: ['write', 'Play a test payment announcement on the Soundbox.', schema()],
   raise_ticket: ['write', 'Open an operations ticket for tracking or follow-up by a team (e.g. settlements, kyc, devices).', schema({ category: { type: 'string' }, priority: { type: 'string', enum: ['P1', 'P2', 'P3'] }, summary: { type: 'string' } }, ['category', 'summary'])],
   search_help_center: ['read', 'Search the merchant help center for policies and how-to answers.', schema({ query: { type: 'string' } }, ['query'])],
   escalate_to_human: ['handoff', 'Hand the case to a human specialist with a reason. Use when unsure, when the merchant asks for a person, or when a needed action was held for approval.', schema({ reason: { type: 'string' } }, ['reason'])],
@@ -521,10 +544,24 @@ async function pbRefund(run, tri, base) {
   return res('RESOLVED_AI', 'REFUND_REINITIATED', { ...facts, ref: x.new_reference }, `Re-sent ${row.id} (${inr(row.amount)}), ref ${x.new_reference}`)
 }
 
+function targetLanguage(text) {
+  const low = text.toLowerCase()
+  return Object.entries(LEX.announcement_languages).find(([, spec]) => spec.match.some((m) => low.includes(m)))?.[0] || null
+}
+
+// Do remotely only what a connected Soundbox allows; guide the merchant through anything physical.
 async function pbSoundbox(run, tri, base, text) {
   const lang = tri.language
   const toks = new Set(tokens(text))
-  if (toks.has('language') || toks.has('bhasha') || text.includes('भाषा')) {
+  if (toks.has('language') || toks.has('bhasha') || toks.has('bhaasha') || text.includes('भाषा')) {
+    const target = targetLanguage(text)
+    if (target) {
+      const r = await run.run('set_announcement_language', { language: target })
+      if (!r.blocked && !r.error) {
+        const shown = lang === 'hi' ? LEX.announcement_languages[target].hi : target
+        return res('RESOLVED_AI', 'SOUNDBOX_LANGUAGE_SET', { ...base, device_id: r.device_id, language: shown }, `Set ${r.device_id} announcements to ${target} and played a test`)
+      }
+    }
     const r = await run.run('search_help_center', { query: 'soundbox announcement language' })
     const id = r.results?.[0]?.id || 'KB-106'
     return res('RESOLVED_AI', 'FAQ_ANSWER', { ...base, answer: seed.kb.find((d) => d.id === id).short[lang] }, 'Explained how to change announcement language')
@@ -532,16 +569,32 @@ async function pbSoundbox(run, tri, base, text) {
   const d = await run.run('run_soundbox_diagnostics', {})
   const facts = { ...base, device_id: d.device_id, volume: d.volume }
   const issues = d.issues || []
-  if (issues.includes('hardware_fault') || issues.includes('offline')) {
+  if (issues.includes('hardware_fault') || issues.includes('offline_long')) {
+    const problem = issues.includes('hardware_fault') ? phrase('problem_fault', lang) : phrase('problem_offline', lang, { hours: Math.round((d.last_ping_minutes || 0) / 60) })
     const t = await run.run('raise_ticket', { category: 'devices', priority: 'P2', summary: `Replace Soundbox ${d.device_id}: ${issues.join(', ')}` })
-    return res('RESOLVED_AI', 'SOUNDBOX_REPLACEMENT', { ...facts, ticket_ref: t.ticket_ref }, `Booked replacement for ${d.device_id}`)
+    return res('RESOLVED_AI', 'SOUNDBOX_REPLACEMENT', { ...facts, ticket_ref: t.ticket_ref, problem }, `Booked replacement for ${d.device_id}`)
   }
-  const fix = {}, it = [], ft = []
-  if (issues.includes('volume_zero')) { fix.volume = 80; it.push(phrase('issue_volume', lang)); ft.push(phrase('fix_volume', lang)) }
-  if (issues.includes('weak_signal_no_fallback')) { fix.network_fallback = true; it.push(phrase('issue_signal', lang)); ft.push(phrase('fix_fallback', lang)) }
-  if (Object.keys(fix).length) {
-    await run.run('update_soundbox_settings', fix)
-    const j = phrase('and', lang)
+  const j = phrase('and', lang)
+  const it = [], ft = []
+  if (issues.includes('offline') || issues.includes('weak_signal_no_fallback')) {
+    const r = await run.run('reconnect_device', {})
+    if (issues.includes('offline')) it.push(phrase('issue_offline', lang))
+    if (issues.includes('weak_signal_no_fallback')) it.push(phrase('issue_signal', lang))
+    ft.push(phrase(r.switched_to_backup_network ? 'fix_backup_network' : 'fix_reconnect', lang))
+  }
+  if (issues.includes('volume_zero')) {
+    // Volume is a physical button. Missed announcements wait until the merchant can hear them.
+    const note = ft.length ? phrase('fixed_note', lang, { fixes: ft.join(j) }) : ''
+    return res('RESOLVED_AI', 'SOUNDBOX_VOLUME_GUIDE', { ...facts, fixed_note: note },
+      `${d.device_id} muted; guided merchant to press + 3 times${ft.length ? `; ${issues.join(', ')}` : ''}`)
+  }
+  if (issues.includes('missed_announcements')) {
+    const r = await run.run('resend_missed_announcements', {})
+    it.push(phrase('issue_missed', lang, { n: d.missed_announcements }))
+    ft.push(phrase('fix_resend', lang, { n: r.replayed ?? d.missed_announcements }))
+  }
+  if (ft.length) {
+    await run.run('play_test_announcement', {})
     return res('RESOLVED_AI', 'SOUNDBOX_FIXED', { ...facts, issues: it.join(j), fixes: ft.join(j) }, `Fixed ${d.device_id} remotely: ${issues.join(', ')}`)
   }
   return res('RESOLVED_AI', 'SOUNDBOX_OK', facts, `${d.device_id} healthy; gave next steps`)
@@ -578,7 +631,7 @@ const PLAYBOOK_HINTS = {
   FAILED_PAYMENT: 'Find the failed payment (by ID, else amount, else most recent where the customer was debited). If debited, call recheck_payment_status. If the bank says SUCCESS, call mark_payment_recovered. If FAILED, explain auto-reversal.',
   SETTLEMENT_DELAY: 'list_settlements. If ON_HOLD with BANK_TIMEOUT, call retry_settlement then raise_ticket (category settlements, P2). If KYC_PENDING, call get_kyc_status and raise_ticket (category kyc). If SETTLED, give the UTR.',
   REFUND_ISSUE: 'Find the refund. PROCESSED -> give ARN. PROCESSING -> give ETA. FAILED -> call reinitiate_refund (held for approval if above limit).',
-  SOUNDBOX: 'run_soundbox_diagnostics. Fix volume_zero (set 80) and weak_signal_no_fallback (network_fallback true) with update_soundbox_settings. Hardware fault or offline -> raise_ticket (devices).',
+  SOUNDBOX: 'run_soundbox_diagnostics. Weak signal or offline -> reconnect_device. Missed announcements -> resend_missed_announcements, then play_test_announcement. Volume 0 cannot be changed remotely: tell the merchant to press + 3 times. Language change -> set_announcement_language. Hardware fault or offline for hours -> raise_ticket (devices) for a replacement.',
   KYC: 'get_kyc_status and list any missing documents.',
   GENERAL: 'search_help_center and answer from the best result.',
   UNKNOWN: 'Investigate briefly; if still unclear, escalate_to_human.',
@@ -603,7 +656,8 @@ function inferOutcome(calls, base, summary) {
     return res('RESOLVED_AI', 'SETTLEMENT_RETRIED', { ...base, settlement_id: s.id, amount: inr(s.amount), bank: s.destination, bank_name: s.destination.split(' ••')[0], utr: s.utr, ticket_ref: by.raise_ticket?.result?.ticket_ref || '-' }, summary)
   }
   if (by.reinitiate_refund) { const r = S.refunds.get(by.reinitiate_refund.args.refund_id); return res('RESOLVED_AI', 'REFUND_REINITIATED', { ...base, refund_id: r.id, amount: inr(r.amount), reason: '-', ref: by.reinitiate_refund.result.new_reference }, summary) }
-  if (by.update_soundbox_settings) return res('RESOLVED_AI', 'GENERIC_RESOLVED', { ...base, summary }, summary)
+  if (by.set_announcement_language) return res('RESOLVED_AI', 'SOUNDBOX_LANGUAGE_SET', { ...base, device_id: by.set_announcement_language.result.device_id, language: by.set_announcement_language.result.language }, summary)
+  if (by.reconnect_device || by.resend_missed_announcements) return res('RESOLVED_AI', 'GENERIC_RESOLVED', { ...base, summary }, summary)
   if (by.recheck_payment_status) {
     const c = by.recheck_payment_status.result
     if (c.bank_final_status === 'FAILED' && c.customer_debited) { const t = S.txns.get(c.txn_id); return res('RESOLVED_AI', 'PAYMENT_AUTO_REVERSAL', { ...base, txn_id: t.id, amount: inr(t.amount) }, summary) }
@@ -653,6 +707,10 @@ export function describeCall(c) {
   if (n === 'list_settlements') return 'Settlements: ' + (r.settlements || []).slice(0, 3).map((s) => `${s.settlement_id} ${s.status}`).join('; ')
   if (n === 'list_refunds') return 'Refunds: ' + (r.refunds || []).slice(0, 3).map((x) => `${x.refund_id} ${x.amount_display} ${x.status}`).join('; ')
   if (n === 'get_refund') return `Refund ${r.refund_id} · ${r.amount_display} · ${r.status}`
+  if (n === 'reconnect_device') return `Reconnected Soundbox ${r.device_id}${r.switched_to_backup_network ? ' on the backup network' : ''}`
+  if (n === 'resend_missed_announcements') return `Re-announced ${r.replayed} missed payment(s)`
+  if (n === 'set_announcement_language') return `Soundbox language set to ${r.language}`
+  if (n === 'play_test_announcement') return `Played a test announcement${r.audible ? '' : ' (volume 0, not audible)'}`
   if (n === 'run_soundbox_diagnostics') return `Soundbox ${r.device_id} diagnostics: ${(r.issues && r.issues.length ? r.issues : ['no issues']).join(', ')}`
   if (n === 'get_kyc_status') return `KYC ${r.kyc_status}${r.missing_documents?.length ? `, missing ${r.missing_documents.join(', ')}` : ''}`
   if (n === 'search_help_center') return `Help center: ${r.results?.[0] ? `${r.results[0].id} ${r.results[0].title}` : 'no match'}`
@@ -959,7 +1017,8 @@ export async function simulate(n, onEvent = () => {}, seedVal = Date.now()) {
     if (!S.merchants.has(id)) {
       S.merchants.set(id, { id, name, owner, city, category: 'Retail', lang, phone: '9000000000', plan: 'Soundbox 4G + QR', settlement_cycle: 'T+1',
         kyc_status: kyc, kyc_missing: kyc === 'VERIFIED' ? [] : ['GST certificate'], bank, bank_verified: true,
-        soundbox: { id: `SB-5${i}210`, model: 'Soundbox 4G', online: true, volume: 70, signal: 'good', language: 'Hindi', network_fallback: true, fault: null } })
+        soundbox: { id: `SB-5${i}210`, model: 'Soundbox 4G', online: true, volume: 70, signal: 'good', language: 'Hindi', network_fallback: true, fault: null,
+          battery: 70, last_ping_minutes: 1, missed_announcements: 0 } })
     }
   })
   const intents = Object.entries(SIM_WEIGHTS).flatMap(([k, w]) => Array(w).fill(k))
@@ -987,9 +1046,10 @@ export async function simulate(n, onEvent = () => {}, seedVal = Date.now()) {
         initiated_at: t - (1000 + Math.floor(r() * 4000)) * 60000, arn: null, eta_at: failed ? null : t + 1440 * 60000 })
       fields.amount = inr(amount)
     } else if (intent === 'SOUNDBOX') {
-      const issue = pick(['volume', 'signal', 'both', 'fault'])
+      const issue = pick(['volume', 'signal', 'both', 'missed', 'offline', 'fault'])
       Object.assign(m.soundbox, { volume: ['volume', 'both'].includes(issue) ? 0 : 70, signal: ['signal', 'both'].includes(issue) ? 'weak' : 'good',
-        network_fallback: ['signal', 'both'].includes(issue) ? false : m.soundbox.network_fallback, fault: issue === 'fault' ? 'speaker' : null })
+        network_fallback: !['signal', 'both'].includes(issue), online: issue !== 'offline', last_ping_minutes: issue === 'offline' ? 400 + Math.floor(r() * 500) : 1,
+        missed_announcements: ['missed', 'signal'].includes(issue) ? 1 + Math.floor(r() * 4) : 0, fault: issue === 'fault' ? 'speaker' : null })
     }
     const tpl = pick(LEX.simulation[intent]).text
     const msg = fields.amount ? fill(tpl, fields) : tpl.replace('{amount}', '').replace(/ {2}/g, ' ')

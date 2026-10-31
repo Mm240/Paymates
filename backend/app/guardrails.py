@@ -9,13 +9,15 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from .config import POLICY
+from .config import LEXICON, POLICY
 from .text import inr
 
 LIMIT = POLICY["auto_money_limit"]
 RETRYABLE = set(POLICY["retryable_hold_reasons"])
 
 MONEY_TOOLS = {"mark_payment_recovered", "retry_settlement", "reinitiate_refund"}
+DEVICE_TOOLS = {"reconnect_device", "resend_missed_announcements", "set_announcement_language", "play_test_announcement"}
+SOUNDBOX_LANGUAGES = set(LEXICON["announcement_languages"])
 
 
 def verdict(allowed: bool, rule: str, reason: str, requires_approval: bool = False) -> dict:
@@ -62,11 +64,13 @@ def check(name: str, args: dict, store, merchant_id: str, approved_by: Optional[
         return verdict(True, "money-limit", f"{inr(r['amount'])} is within the {inr(LIMIT)} limit"
                        if not approved_by else f"Approved by {approved_by}")
 
-    if name == "update_soundbox_settings":
-        vol = args.get("volume")
-        if vol is not None and not (0 <= int(vol) <= 100):
-            return verdict(False, "value-range", "Volume must be between 0 and 100")
-        return verdict(True, "device-settings", "Device settings change, no money involved")
+    if name == "set_announcement_language":
+        if str(args.get("language")) not in SOUNDBOX_LANGUAGES:
+            return verdict(False, "value-range", f"{args.get('language')} is not a language the Soundbox supports")
+        return verdict(True, "device-action", "Device setting the Soundbox supports remotely; no money involved")
+
+    if name in DEVICE_TOOLS:
+        return verdict(True, "device-action", "Remote device action; no money involved")
 
     return verdict(True, "read-or-low-risk", "Read-only or low-risk action")
 

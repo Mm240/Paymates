@@ -10,10 +10,14 @@ import time
 from typing import Any, Awaitable, Callable, Optional
 
 from . import council
+from .config import LEXICON
 from .guardrails import MONEY_TOOLS, check, mask_pii
 from .rag import index
 from .store import Store, now_ms
 from .text import inr
+
+SOUNDBOX_LANGUAGES = list(LEXICON["announcement_languages"])
+OFFLINE_LONG_MIN = 6 * 60      # silent this long -> treat as a device that needs a technician
 
 
 # ---------------------------------------------------------------- tool implementations
@@ -113,27 +117,52 @@ def run_soundbox_diagnostics(s: Store, mid: str, a: dict) -> dict:
     if sb.get("fault"):
         issues.append("hardware_fault")
     if not sb.get("online"):
-        issues.append("offline")
+        issues.append("offline_long" if sb.get("last_ping_minutes", 0) > OFFLINE_LONG_MIN else "offline")
     if sb.get("volume", 0) == 0:
         issues.append("volume_zero")
     if sb.get("signal") == "weak" and not sb.get("network_fallback"):
         issues.append("weak_signal_no_fallback")
+    if sb.get("missed_announcements", 0) > 0:
+        issues.append("missed_announcements")
     return {"device_id": sb["id"], "model": sb["model"], "online": sb["online"], "volume": sb["volume"],
-            "signal": sb["signal"], "network_fallback": sb["network_fallback"], "issues": issues}
+            "signal": sb["signal"], "network_fallback": sb["network_fallback"], "battery": sb.get("battery"),
+            "last_ping_minutes": sb.get("last_ping_minutes"), "missed_announcements": sb.get("missed_announcements", 0),
+            "language": sb.get("language"), "fault": sb.get("fault"), "issues": issues}
 
 
-def update_soundbox_settings(s: Store, mid: str, a: dict) -> dict:
-    m = s.merchant(mid)
-    sb = dict(m["soundbox"])
-    if a.get("volume") is not None:
-        sb["volume"] = int(a["volume"])
-    if a.get("network_fallback") is not None:
-        sb["network_fallback"] = bool(a["network_fallback"])
-        if sb["network_fallback"] and sb["signal"] == "weak":
-            sb["signal"] = "good (fallback network)"
+# Remote device actions: only what a connected Soundbox really allows. Volume is a physical button.
+def _save_sb(s: Store, mid: str, sb: dict) -> None:
     s.update("merchants", mid, {"soundbox": sb})
-    return {"device_id": sb["id"], "volume": sb["volume"], "network_fallback": sb["network_fallback"],
-            "test_announcement": "played", "signal": sb["signal"]}
+
+
+def reconnect_device(s: Store, mid: str, a: dict) -> dict:
+    sb = dict(s.merchant(mid)["soundbox"])
+    switched = sb["signal"] == "weak" and not sb["network_fallback"]
+    if switched:
+        sb.update(network_fallback=True, signal="good (backup network)")
+    sb.update(online=True, last_ping_minutes=0)
+    _save_sb(s, mid, sb)
+    return {"device_id": sb["id"], "online": True, "signal": sb["signal"], "switched_to_backup_network": switched}
+
+
+def resend_missed_announcements(s: Store, mid: str, a: dict) -> dict:
+    sb = dict(s.merchant(mid)["soundbox"])
+    n = sb.get("missed_announcements", 0)
+    sb["missed_announcements"] = 0
+    _save_sb(s, mid, sb)
+    return {"device_id": sb["id"], "replayed": n}
+
+
+def set_announcement_language(s: Store, mid: str, a: dict) -> dict:
+    sb = dict(s.merchant(mid)["soundbox"])
+    sb["language"] = str(a["language"])
+    _save_sb(s, mid, sb)
+    return {"device_id": sb["id"], "language": sb["language"], "test_announcement": "played"}
+
+
+def play_test_announcement(s: Store, mid: str, a: dict) -> dict:
+    sb = s.merchant(mid)["soundbox"]
+    return {"device_id": sb["id"], "played": True, "audible": sb["volume"] > 0, "volume": sb["volume"], "language": sb.get("language")}
 
 
 def raise_ticket(s: Store, mid: str, a: dict, ticket_id: Optional[str] = None) -> dict:
@@ -171,9 +200,12 @@ TOOLS: dict[str, tuple[Callable, str, str, dict]] = {
     "reinitiate_refund": (reinitiate_refund, "write", "Re-send a FAILED refund to the customer's original payment source. Moves money; amounts above the limit need human approval.",
                           _schema({"refund_id": {"type": "string"}}, ["refund_id"])),
     "get_kyc_status": (get_kyc_status, "read", "Get KYC status and any missing documents.", _schema({})),
-    "run_soundbox_diagnostics": (run_soundbox_diagnostics, "check", "Run remote diagnostics on the merchant's Soundbox: online, volume, signal, faults.", _schema({})),
-    "update_soundbox_settings": (update_soundbox_settings, "write", "Change Soundbox volume (0-100) and/or turn network fallback on. Plays a test announcement.",
-                                 _schema({"volume": {"type": "integer"}, "network_fallback": {"type": "boolean"}})),
+    "run_soundbox_diagnostics": (run_soundbox_diagnostics, "check", "Run remote diagnostics on the merchant's Soundbox: online, volume, signal, battery, last ping, missed announcements, faults.", _schema({})),
+    "reconnect_device": (reconnect_device, "write", "Re-register the Soundbox on the network; moves it to the backup network if the signal is weak.", _schema({})),
+    "resend_missed_announcements": (resend_missed_announcements, "write", "Re-play payment announcements the Soundbox missed. Only useful when the volume is above 0.", _schema({})),
+    "set_announcement_language": (set_announcement_language, "write", "Change the language the Soundbox announces payments in.",
+                                  _schema({"language": {"type": "string", "enum": SOUNDBOX_LANGUAGES}}, ["language"])),
+    "play_test_announcement": (play_test_announcement, "write", "Play a test payment announcement on the Soundbox.", _schema({})),
     "raise_ticket": (raise_ticket, "write", "Open an operations ticket for tracking or follow-up by a team (e.g. settlements, kyc, devices).",
                      _schema({"category": {"type": "string"}, "priority": {"type": "string", "enum": ["P1", "P2", "P3"]}, "summary": {"type": "string"}}, ["category", "summary"])),
     "search_help_center": (search_help_center, "read", "Search the merchant help center for policies and how-to answers.",

@@ -67,9 +67,9 @@
       "hi": "ठीक हो गया {owner_first} जी! आपके साउंडबॉक्स {device_id} में {issues} था। मैंने रिमोट से {fixes} और टेस्ट घोषणा चला दी है। ₹1 का भुगतान करके सुन लीजिए।"
     },
     "SOUNDBOX_REPLACEMENT": {
-      "en": "Your Soundbox {device_id} has a hardware fault I can't fix remotely. I've booked a free replacement under ticket {ticket_ref}; a technician will contact you within 24 hours.",
-      "hinglish": "Aapke Soundbox {device_id} mein hardware fault hai jo remotely theek nahi ho sakta. Maine ticket {ticket_ref} mein free replacement book kar diya hai; 24 ghante mein technician contact karega.",
-      "hi": "आपके साउंडबॉक्स {device_id} में हार्डवेयर खराबी है जो रिमोट से ठीक नहीं हो सकती। मैंने टिकट {ticket_ref} में मुफ़्त रिप्लेसमेंट बुक कर दिया है; 24 घंटे में तकनीशियन संपर्क करेगा।"
+      "en": "Your Soundbox {device_id} has {problem} that I can't fix remotely. I've booked a free replacement under ticket {ticket_ref}; a technician will contact you within 24 hours.",
+      "hinglish": "Aapke Soundbox {device_id} mein {problem} hai jo main remotely theek nahi kar sakta. Maine ticket {ticket_ref} par free replacement book kar diya hai; technician 24 ghante mein contact karega.",
+      "hi": "आपके साउंडबॉक्स {device_id} में {problem} है जिसे मैं रिमोट से ठीक नहीं कर सकता। मैंने टिकट {ticket_ref} पर मुफ़्त बदलाव बुक कर दिया है; तकनीशियन 24 घंटे में संपर्क करेगा।"
     },
     "SOUNDBOX_OK": {
       "en": "I ran a check on Soundbox {device_id}: it's online, volume is {volume}% and the signal is good. If it still misses an announcement, share the transaction ID and I'll trace it.",
@@ -155,6 +155,16 @@
       "en": "Hi {owner_first}, PayMates here. I checked your payments, settlements, refunds and Soundbox. Everything looks fine right now.",
       "hinglish": "{owner_first} ji, PayMates yahan. Maine aapke payments, settlements, refunds aur Soundbox check kiye. Abhi sab theek hai.",
       "hi": "{owner_first} जी, PayMates बोल रहा हूँ। मैंने आपके भुगतान, सेटलमेंट, रिफंड और साउंडबॉक्स जाँच लिए। अभी सब ठीक है।"
+    },
+    "SOUNDBOX_VOLUME_GUIDE": {
+      "en": "{fixed_note}Your Soundbox {device_id} is on mute (volume 0). Volume is a physical button, so I can't change it from here. Press the + button on your Soundbox 3 times, then I'll play a test announcement.",
+      "hinglish": "{fixed_note}Aapka Soundbox {device_id} mute hai (volume 0). Volume ek button hai, isliye main ise yahan se nahi badal sakta. Soundbox ka + button 3 baar dabaiye, phir main test announcement chala dunga.",
+      "hi": "{fixed_note}आपका साउंडबॉक्स {device_id} म्यूट है (वॉल्यूम 0)। वॉल्यूम एक बटन है, इसलिए मैं इसे यहाँ से नहीं बदल सकता। साउंडबॉक्स का + बटन 3 बार दबाइए, फिर मैं टेस्ट घोषणा चला दूँगा।"
+    },
+    "SOUNDBOX_LANGUAGE_SET": {
+      "en": "Done, {owner_first}. Your Soundbox {device_id} will now announce payments in {language}. I've played a test announcement so you can hear it.",
+      "hinglish": "Ho gaya {owner_first} ji! Aapka Soundbox {device_id} ab payments {language} mein bolega. Maine test announcement chala diya hai, sun lijiye.",
+      "hi": "हो गया {owner_first} जी! आपका साउंडबॉक्स {device_id} अब भुगतान {language} में बोलेगा। मैंने टेस्ट घोषणा चला दी है, सुन लीजिए।"
     }
   },
   "action_done": {
@@ -180,25 +190,10 @@
     }
   },
   "phrases": {
-    "issue_volume": {
-      "en": "volume set to 0%",
-      "hinglish": "volume 0% par",
-      "hi": "वॉल्यूम 0% पर"
-    },
     "issue_signal": {
       "en": "a weak network signal",
       "hinglish": "weak network signal",
       "hi": "कमज़ोर नेटवर्क सिग्नल"
-    },
-    "fix_volume": {
-      "en": "set the volume to 80%",
-      "hinglish": "volume 80% kar diya",
-      "hi": "वॉल्यूम 80% कर दिया"
-    },
-    "fix_fallback": {
-      "en": "switched on network fallback",
-      "hinglish": "network fallback on kar diya",
-      "hi": "नेटवर्क फ़ॉलबैक चालू कर दिया"
     },
     "and": {
       "en": " and ",
@@ -234,6 +229,46 @@
       "en": "about 2 hours",
       "hinglish": "lagbhag 2 ghante",
       "hi": "लगभग 2 घंटे"
+    },
+    "issue_offline": {
+      "en": "lost its connection",
+      "hinglish": "connection chala gaya",
+      "hi": "कनेक्शन टूट गया"
+    },
+    "issue_missed": {
+      "en": "{n} payments that were not announced",
+      "hinglish": "{n} payments jo announce nahi hue",
+      "hi": "{n} भुगतान जो बोले नहीं गए"
+    },
+    "fix_reconnect": {
+      "en": "reconnected it",
+      "hinglish": "use dobara connect kar diya",
+      "hi": "इसे दोबारा कनेक्ट कर दिया"
+    },
+    "fix_backup_network": {
+      "en": "moved it to the backup network",
+      "hinglish": "backup network par shift kar diya",
+      "hi": "इसे बैकअप नेटवर्क पर कर दिया"
+    },
+    "fix_resend": {
+      "en": "re-announced the {n} missed payments",
+      "hinglish": "{n} chhoote hue payments dobara announce kar diye",
+      "hi": "{n} छूटे हुए भुगतान दोबारा बोल दिए"
+    },
+    "fixed_note": {
+      "en": "I've {fixes}. ",
+      "hinglish": "Maine {fixes}. ",
+      "hi": "मैंने {fixes}। "
+    },
+    "problem_fault": {
+      "en": "a hardware fault",
+      "hinglish": "hardware fault",
+      "hi": "हार्डवेयर खराबी"
+    },
+    "problem_offline": {
+      "en": "been offline for {hours} hours",
+      "hinglish": "{hours} ghante se offline",
+      "hi": "{hours} घंटे से ऑफ़लाइन"
     }
   }
 }

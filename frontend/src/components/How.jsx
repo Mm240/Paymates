@@ -4,7 +4,7 @@ import { inr } from '../engine/core.js'
 const AGENTS = [
   ['Triage', 'Reads the message in English, Hindi or Hinglish; picks the issue, pulls out IDs and amounts, scores its own confidence.', 'Fast model (Groq Llama · Gemini Flash · GPT mini)'],
   ['Context', 'Pulls the merchant’s live records, past tickets and the most relevant help-center docs before anyone replies.', 'Code: SQL + TF-IDF vector search'],
-  ['Action', 'Plans and calls tools in a loop: check, recheck with the bank, retry, re-send, fix the device, raise a ticket.', 'Strongest tool-calling model (Claude Sonnet · GPT-4.1 · Gemini Pro)'],
+  ['Action', 'Plans and calls tools in a loop: check, recheck with the bank, retry, re-send, reconnect the Soundbox, raise a ticket.', 'Strongest tool-calling model (Claude Sonnet · GPT-4.1 · Gemini Pro)'],
   ['Council', 'Before any money moves on its own, three code auditors (ledger, replay, velocity) and one AI juror per provider vote. Auditors can veto; jurors decide by majority.', 'One juror per lab: Claude · GPT · Gemini · Llama (Groq) · OpenRouter · Ollama'],
   ['Escalation', 'When a human is needed, writes the briefing: what was said, what was checked, what to approve.', 'Careful summariser (Claude Haiku · GPT mini)'],
   ['Reply', 'Writes back in the merchant’s language, then a grounding check confirms every amount and ID matches the tool results.', 'Multilingual model (Gemini Flash) + templates'],
@@ -47,7 +47,7 @@ export function HowItWorks({ info }) {
           <div className="arch-arrow">↓ every tool call passes the guardrails first · every money move also goes to the council</div>
           <div className="arch-box council-arch"><b>Model Council: no single model can move money</b><small>Ledger, replay and velocity auditors (code, can veto) + one AI juror from each configured lab (majority vote). A hold goes to the human console with the council's reasons.</small></div>
           <div className="arch-row cols-3">
-            <div className="arch-box"><b>Tools</b><small>Mock Paytm merchant APIs: payments, bank recheck, settlements, refunds, KYC, Soundbox diagnostics, ops tickets</small></div>
+            <div className="arch-box"><b>Tools</b><small>Mock Paytm merchant APIs: payments, bank recheck, settlements, refunds, KYC, ops tickets, and Soundbox diagnostics plus the remote actions a connected device really allows: reconnect, re-announce missed payments, change language, test announcement</small></div>
             <div className="arch-box"><b>Knowledge</b><small>Help-center RAG with ranked sources shown in the trace</small></div>
             <div className="arch-box"><b>Memory</b><small>Merchant history, past tickets and the conversation so far</small></div>
           </div>
@@ -74,6 +74,7 @@ export function HowItWorks({ info }) {
             <div><b>Stays in scope</b><span>The agent can only touch records of the merchant it is serving.</span></div>
             <div><b>Grounded replies</b><span>A model's rewrite is sent only if every amount and ID matches the tool results; otherwise the verified template goes out.</span></div>
             <div><b>Private by default</b><span>Phone numbers, UPI IDs and account numbers are masked before logs or model calls.</span></div>
+            <div><b>Honest about devices</b><span>Volume is a physical button, so PayMates never pretends to change it: it guides the merchant (press + three times) and remotely does only what a connected Soundbox allows. Hardware faults get a technician.</span></div>
             <div><b>A second opinion</b><span>Money moves need the Model Council to agree: independent code auditors plus AI jurors from different labs, so one model's mistake can't move money.</span></div>
             <div><b>Never stuck</b><span>If any model fails or times out, that step falls back to the rules engine and the ticket still closes.</span></div>
           </div>

@@ -33,6 +33,14 @@ def describe_call(c: dict) -> str:
         return f"Refund {r.get('refund_id')} · {r.get('amount_display')} · {r.get('status')}"
     if n == "run_soundbox_diagnostics":
         return f"Soundbox {r.get('device_id')} diagnostics: {', '.join(r.get('issues') or ['no issues'])}"
+    if n == "reconnect_device":
+        return f"Reconnected Soundbox {r.get('device_id')}" + (" on the backup network" if r.get("switched_to_backup_network") else "")
+    if n == "resend_missed_announcements":
+        return f"Re-announced {r.get('replayed')} missed payment(s)"
+    if n == "set_announcement_language":
+        return f"Soundbox language set to {r.get('language')}"
+    if n == "play_test_announcement":
+        return "Played a test announcement" + ("" if r.get("audible") else " (volume 0, not audible)")
     if n == "get_kyc_status":
         return f"KYC {r.get('kyc_status')}" + (f", missing {', '.join(r['missing_documents'])}" if r.get("missing_documents") else "")
     if n == "search_help_center":

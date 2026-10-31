@@ -34,7 +34,10 @@
         "signal": "good",
         "language": "Hindi",
         "network_fallback": true,
-        "fault": null
+        "fault": null,
+        "battery": 82,
+        "last_ping_minutes": 1,
+        "missed_announcements": 0
       }
     },
     {
@@ -59,7 +62,10 @@
         "signal": "good",
         "language": "English",
         "network_fallback": true,
-        "fault": null
+        "fault": null,
+        "battery": 64,
+        "last_ping_minutes": 2,
+        "missed_announcements": 0
       }
     },
     {
@@ -87,7 +93,10 @@
         "signal": "weak",
         "language": "Hindi",
         "network_fallback": false,
-        "fault": null
+        "fault": null,
+        "battery": 41,
+        "last_ping_minutes": 18,
+        "missed_announcements": 3
       }
     }
   ],
@@ -326,11 +335,11 @@
     {
       "id": "KB-105",
       "title": "Soundbox not announcing payments",
-      "body": "If your Soundbox is not announcing payments, check that the volume is not zero, the device is charged, and the network signal is good. Weak signal can delay announcements; enabling network fallback switches to a stronger network. Restart the device by holding the power button for 5 seconds. Announcement language can be changed from the app.",
+      "body": "If your Soundbox is not announcing payments, check that the volume is not zero, the device is charged, and the network signal is good. Volume is a physical button: press + to raise it. Weak signal can delay announcements; PayMates can reconnect the device and move it to a backup network remotely, and re-announce payments it missed. Restart the device by holding the power button for 5 seconds. Announcement language can be changed from the app, or by asking PayMates.",
       "short": {
-        "en": "A silent Soundbox is usually volume at zero, a weak network or low battery. Raising the volume and turning on network fallback fixes most cases.",
-        "hinglish": "Soundbox chup hai to aksar volume zero, weak network ya low battery hota hai. Volume badhane aur network fallback on karne se zyadatar theek ho jata hai.",
-        "hi": "साउंडबॉक्स चुप है तो अक्सर वॉल्यूम शून्य, कमज़ोर नेटवर्क या कम बैटरी होती है। वॉल्यूम बढ़ाने और नेटवर्क फ़ॉलबैक चालू करने से ज़्यादातर ठीक हो जाता है।"
+        "en": "A silent Soundbox is usually volume at zero, a weak network or low battery. Press + to raise the volume; PayMates can reconnect it to a backup network and re-announce missed payments.",
+        "hinglish": "Soundbox chup hai to aksar volume zero, weak network ya low battery hota hai. + button se volume badhaiye; PayMates use backup network par jod kar chhoote announcements dobara bulwa sakta hai.",
+        "hi": "साउंडबॉक्स चुप है तो अक्सर वॉल्यूम शून्य, कमज़ोर नेटवर्क या कम बैटरी होती है। + बटन से वॉल्यूम बढ़ाइए; PayMates इसे बैकअप नेटवर्क से जोड़कर छूटी घोषणाएँ दोबारा बुलवा सकता है।"
       }
     },
     {

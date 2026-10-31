@@ -131,10 +131,12 @@ def _setup_case(store: Store, rng: random.Random, intent: str, mid: str) -> dict
     elif intent == "SOUNDBOX":
         m = store.merchant(mid)
         sb = dict(m["soundbox"])
-        issue = rng.choice(["volume", "signal", "both", "fault"])
+        issue = rng.choice(["volume", "signal", "both", "missed", "offline", "fault"])
         sb.update(volume=0 if issue in ("volume", "both") else 70,
                   signal="weak" if issue in ("signal", "both") else "good",
-                  network_fallback=False if issue in ("signal", "both") else sb["network_fallback"],
+                  network_fallback=False if issue in ("signal", "both") else True,
+                  online=issue != "offline", last_ping_minutes=rng.randint(400, 900) if issue == "offline" else 1,
+                  missed_announcements=rng.randint(1, 4) if issue in ("missed", "signal") else 0,
                   fault="speaker" if issue == "fault" else None)
         store.update("merchants", mid, {"soundbox": sb})
     return fields
@@ -161,7 +163,8 @@ def _ensure_sim_merchants(store: Store) -> list[str]:
             "plan": "Soundbox 4G + QR", "settlement_cycle": "T+1", "kyc_status": kyc,
             "kyc_missing": ["GST certificate"] if kyc != "VERIFIED" else [], "bank": bank, "bank_verified": True,
             "soundbox": {"id": f"SB-5{i}210", "model": "Soundbox 4G", "online": True, "volume": 70, "signal": "good",
-                         "language": "Hindi", "network_fallback": True, "fault": None}})
+                         "language": "Hindi", "network_fallback": True, "fault": None, "battery": 70, "last_ping_minutes": 1,
+                         "missed_announcements": 0}})
     return [m[0] for m in SIM_MERCHANTS]
 
 

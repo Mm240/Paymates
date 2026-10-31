@@ -11,6 +11,7 @@ export const SUGGEST = {
   ],
   M1002: [
     { tag: 'Demo 3', text: 'Customer says refund not received.' },
+    { text: 'Change my Soundbox announcement language to Tamil' },
     { text: 'Which documents do I need for KYC?' },
     { text: 'I want to talk to a real person about a customer dispute.' },
   ],
@@ -168,8 +169,11 @@ function toolSummary(t) {
     case 'get_refund': return `${r.refund_id} · ${r.amount_display} · ${r.status}`
     case 'reinitiate_refund': return `Re-sent ${r.amount_display} · ref ${r.new_reference}`
     case 'get_kyc_status': return `KYC ${r.kyc_status}${r.missing_documents?.length ? ` · missing: ${r.missing_documents.join(', ')}` : ''}`
-    case 'run_soundbox_diagnostics': return `${r.device_id} · volume ${r.volume}% · signal ${r.signal} · issues: ${(r.issues || []).join(', ') || 'none'}`
-    case 'update_soundbox_settings': return `Volume ${r.volume}% · fallback ${r.network_fallback ? 'on' : 'off'} · test announcement ${r.test_announcement}`
+    case 'run_soundbox_diagnostics': return `${r.device_id} · volume ${r.volume}% · signal ${r.signal} · battery ${r.battery}% · last ping ${r.last_ping_minutes} min · ${r.missed_announcements} missed · issues: ${(r.issues || []).join(', ') || 'none'}`
+    case 'reconnect_device': return `Reconnected ${r.device_id}${r.switched_to_backup_network ? ' · moved to backup network' : ''} · signal ${r.signal}`
+    case 'resend_missed_announcements': return `Re-announced ${r.replayed} missed payment(s)`
+    case 'set_announcement_language': return `Announcements now in ${r.language}`
+    case 'play_test_announcement': return r.audible ? `Test announcement played at volume ${r.volume}%` : 'Test announcement sent, but volume is 0'
     case 'raise_ticket': return `Opened ${r.ticket_ref} (${r.priority}) in ${r.queue}`
     case 'search_help_center': return (r.results || []).slice(0, 2).map((d) => `${d.id} ${d.title} (${d.score})`).join(' · ') || 'No match'
     case 'escalate_to_human': return 'Handed to a specialist'

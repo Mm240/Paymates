@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from typing import Optional
 
-from ..config import POLICY, TEMPLATES, model_for
+from ..config import LEXICON, POLICY, TEMPLATES, model_for
 from ..llm import chat, parse_json
 from ..rag import index
 from ..store import Store
@@ -160,10 +160,26 @@ async def pb_refund(run: ToolRunner, store: Store, tri: dict, base: dict) -> dic
     return result("RESOLVED_AI", "REFUND_REINITIATED", facts, f"Re-sent {row['id']} ({inr(row['amount'])}), ref {res['new_reference']}")
 
 
+def target_language(text: str) -> Optional[str]:
+    low = text.lower()
+    for name, spec in LEXICON["announcement_languages"].items():
+        if any(m in low for m in spec["match"]):
+            return name
+    return None
+
+
 async def pb_soundbox(run: ToolRunner, store: Store, tri: dict, base: dict, text: str) -> dict:
+    """Do remotely only what a connected Soundbox allows; guide the merchant through anything physical."""
     lang = tri["language"]
     toks = tokens(text)
-    if {"language", "bhasha"} & set(toks) or "भाषा" in text:
+    if {"language", "bhasha", "bhaasha"} & set(toks) or "भाषा" in text:
+        target = target_language(text)
+        if target:
+            r = await run.run("set_announcement_language", {"language": target})
+            if not r.get("blocked") and not r.get("error"):
+                shown = LEXICON["announcement_languages"][target]["hi"] if lang == "hi" else target
+                return result("RESOLVED_AI", "SOUNDBOX_LANGUAGE_SET", {**base, "device_id": r["device_id"], "language": shown},
+                              f"Set {r['device_id']} announcements to {target} and played a test")
         r = await run.run("search_help_center", {"query": "soundbox announcement language"})
         doc = next(d for d in index.docs if d["id"] == (r["results"][0]["id"] if r["results"] else "KB-106"))
         return result("RESOLVED_AI", "FAQ_ANSWER", {**base, "answer": doc["short"][lang]}, "Explained how to change announcement language")
@@ -171,22 +187,33 @@ async def pb_soundbox(run: ToolRunner, store: Store, tri: dict, base: dict, text
     d = await run.run("run_soundbox_diagnostics", {})
     facts = {**base, "device_id": d["device_id"], "volume": d["volume"]}
     issues = d.get("issues", [])
-    if "hardware_fault" in issues or "offline" in issues:
+    if "hardware_fault" in issues or "offline_long" in issues:
+        problem = phrase("problem_fault", lang) if "hardware_fault" in issues else \
+            phrase("problem_offline", lang, hours=round((d.get("last_ping_minutes") or 0) / 60))
         t = await run.run("raise_ticket", {"category": "devices", "priority": "P2", "summary": f"Replace Soundbox {d['device_id']}: {', '.join(issues)}"})
-        facts["ticket_ref"] = t["ticket_ref"]
+        facts.update(ticket_ref=t["ticket_ref"], problem=problem)
         return result("RESOLVED_AI", "SOUNDBOX_REPLACEMENT", facts, f"Booked replacement for {d['device_id']}")
-    fix_args, issue_txt, fix_txt = {}, [], []
+
+    joiner = phrase("and", lang)
+    issue_txt, fix_txt = [], []
+    if "offline" in issues or "weak_signal_no_fallback" in issues:
+        r = await run.run("reconnect_device", {})
+        if "offline" in issues:
+            issue_txt.append(phrase("issue_offline", lang))
+        if "weak_signal_no_fallback" in issues:
+            issue_txt.append(phrase("issue_signal", lang))
+        fix_txt.append(phrase("fix_backup_network" if r.get("switched_to_backup_network") else "fix_reconnect", lang))
     if "volume_zero" in issues:
-        fix_args["volume"] = 80
-        issue_txt.append(phrase("issue_volume", lang))
-        fix_txt.append(phrase("fix_volume", lang))
-    if "weak_signal_no_fallback" in issues:
-        fix_args["network_fallback"] = True
-        issue_txt.append(phrase("issue_signal", lang))
-        fix_txt.append(phrase("fix_fallback", lang))
-    if fix_args:
-        await run.run("update_soundbox_settings", fix_args)
-        joiner = phrase("and", lang)
+        # Volume is a physical button. Missed announcements wait until the merchant can hear them.
+        note = phrase("fixed_note", lang, fixes=joiner.join(fix_txt)) if fix_txt else ""
+        return result("RESOLVED_AI", "SOUNDBOX_VOLUME_GUIDE", {**facts, "fixed_note": note},
+                      f"{d['device_id']} muted; guided merchant to press + 3 times" + (f"; {', '.join(issues)}" if fix_txt else ""))
+    if "missed_announcements" in issues:
+        r = await run.run("resend_missed_announcements", {})
+        issue_txt.append(phrase("issue_missed", lang, n=d["missed_announcements"]))
+        fix_txt.append(phrase("fix_resend", lang, n=r.get("replayed", d["missed_announcements"])))
+    if fix_txt:
+        await run.run("play_test_announcement", {})
         facts.update(issues=joiner.join(issue_txt), fixes=joiner.join(fix_txt))
         return result("RESOLVED_AI", "SOUNDBOX_FIXED", facts, f"Fixed {d['device_id']} remotely: {', '.join(issues)}")
     return result("RESOLVED_AI", "SOUNDBOX_OK", facts, f"{d['device_id']} healthy; gave next steps")
@@ -235,8 +262,9 @@ PLAYBOOK_HINTS = {
     "SETTLEMENT_DELAY": "list_settlements. If ON_HOLD with BANK_TIMEOUT, call retry_settlement then raise_ticket (category settlements, P2). "
                         "If KYC_PENDING, call get_kyc_status and raise_ticket (category kyc). If SETTLED, give the UTR.",
     "REFUND_ISSUE": "Find the refund. PROCESSED -> give ARN. PROCESSING -> give ETA. FAILED -> call reinitiate_refund (held for approval if above limit).",
-    "SOUNDBOX": "run_soundbox_diagnostics. Fix volume_zero (set 80) and weak_signal_no_fallback (network_fallback true) with update_soundbox_settings. "
-                "Hardware fault or offline -> raise_ticket (devices).",
+    "SOUNDBOX": "run_soundbox_diagnostics. Weak signal or offline -> reconnect_device. Missed announcements -> resend_missed_announcements, "
+                "then play_test_announcement. Volume 0 cannot be changed remotely: tell the merchant to press + 3 times. "
+                "Language change -> set_announcement_language. Hardware fault or offline for hours -> raise_ticket (devices) for a replacement.",
     "KYC": "get_kyc_status and list any missing documents.",
     "GENERAL": "search_help_center and answer from the best result.",
     "UNKNOWN": "Investigate briefly; if still unclear, escalate_to_human.",
@@ -334,9 +362,11 @@ def infer_outcome(store: Store, calls: list[dict], base: dict, lang: str, summar
         r = store.refund(by["reinitiate_refund"]["args"]["refund_id"])
         return result("RESOLVED_AI", "REFUND_REINITIATED", {**base, "refund_id": r["id"], "amount": inr(r["amount"]),
                                                            "reason": "-", "ref": by["reinitiate_refund"]["result"].get("new_reference")}, summary)
-    if "update_soundbox_settings" in by:
-        res = by["update_soundbox_settings"]["result"]
-        return result("RESOLVED_AI", "GENERIC_RESOLVED", {**base, "summary": summary, "device_id": res.get("device_id")}, summary)
+    if "set_announcement_language" in by:
+        res = by["set_announcement_language"]["result"]
+        return result("RESOLVED_AI", "SOUNDBOX_LANGUAGE_SET", {**base, "device_id": res.get("device_id"), "language": res.get("language")}, summary)
+    if {"reconnect_device", "resend_missed_announcements"} & set(by):
+        return result("RESOLVED_AI", "GENERIC_RESOLVED", {**base, "summary": summary}, summary)
     if "recheck_payment_status" in by:
         chk = by["recheck_payment_status"]["result"]
         if chk.get("bank_final_status") == "FAILED" and chk.get("customer_debited"):

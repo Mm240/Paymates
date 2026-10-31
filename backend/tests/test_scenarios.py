@@ -64,11 +64,14 @@ def test_demo_3_refund_escalates_then_human_approves(store):
     assert "Priya" in out["followup"]["text"]
 
 
-def test_hindi_soundbox_fixed(store):
-    t, _ = run(store, "M1003", "मेरा साउंडबॉक्स भुगतान बोल नहीं रहा")
-    assert t["lang"] == "hi" and t["outcome"] == "SOUNDBOX_FIXED"
+def test_hindi_soundbox_muted_is_guided_not_faked(store):
+    t, ev = run(store, "M1003", "मेरा साउंडबॉक्स भुगतान बोल नहीं रहा")
+    assert t["lang"] == "hi" and t["outcome"] == "SOUNDBOX_VOLUME_GUIDE"
     sb = store.merchant("M1003")["soundbox"]
-    assert sb["volume"] == 80 and sb["network_fallback"] is True
+    assert sb["volume"] == 0                                         # volume is a physical button; never "fixed" remotely
+    assert sb["network_fallback"] is True and "backup" in sb["signal"]  # weak signal: moved to the backup network
+    assert "+ बटन 3 बार" in t["reply"]
+    assert "update_soundbox_settings" not in tools_called(ev)
 
 
 def test_kyc_hold_settlement(store):
@@ -257,3 +260,38 @@ def test_checkin_skips_records_already_handled_in_chat(store):
 def test_proactive_metric_counts_fixes(store):
     checkin(store, "M1003")
     assert ops.metrics(store)["proactive_fixed"] >= 2
+
+
+# ---------------------------------------------------------------- realistic Soundbox
+def test_soundbox_diagnostics_report_telemetry(store):
+    from app.tools import run_soundbox_diagnostics
+    d = run_soundbox_diagnostics(store, "M1003", {})
+    assert {"battery", "last_ping_minutes", "missed_announcements"} <= set(d)
+    assert "missed_announcements" in d["issues"] and "volume_zero" in d["issues"]
+
+
+def test_soundbox_missed_announcements_resent(store):
+    sb = {**store.merchant("M1001")["soundbox"], "missed_announcements": 2}
+    store.update("merchants", "M1001", {"soundbox": sb})
+    t, ev = run(store, "M1001", "Soundbox ki awaaz nahi aa rahi, payment announce nahi hua")
+    assert t["outcome"] == "SOUNDBOX_FIXED"
+    assert tools_called(ev)[-2:] == ["resend_missed_announcements", "play_test_announcement"]
+    assert store.merchant("M1001")["soundbox"]["missed_announcements"] == 0
+
+
+def test_soundbox_language_change(store):
+    t, ev = run(store, "M1002", "Please change my soundbox announcement language to Tamil")
+    assert t["outcome"] == "SOUNDBOX_LANGUAGE_SET"
+    assert store.merchant("M1002")["soundbox"]["language"] == "Tamil"
+
+
+def test_soundbox_unsupported_language_blocked(store):
+    from app.guardrails import check as guard
+    assert not guard("set_announcement_language", {"language": "Klingon"}, store, "M1002")["allowed"]
+
+
+def test_soundbox_long_offline_books_technician(store):
+    sb = {**store.merchant("M1002")["soundbox"], "online": False, "last_ping_minutes": 600}
+    store.update("merchants", "M1002", {"soundbox": sb})
+    t, ev = run(store, "M1002", "My soundbox is not announcing payments")
+    assert t["outcome"] == "SOUNDBOX_REPLACEMENT" and "raise_ticket" in tools_called(ev)
