@@ -587,3 +587,21 @@ body {
   .rcard { animation: none; }
   .rcard-steps li.current .dot { animation: none; box-shadow: 0 0 0 3px var(--tone-soft); }
 }
+
+/* ------------------------------------------------------------------ unit economics + pilot readiness */
+.kpis.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) { .kpis.three { grid-template-columns: minmax(0, 1fr); } }
+.kpi .val.vs { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.kpi .val.vs small { font-size: 0.4em; }
+.pilot { margin-bottom: 18px; }
+.gates { list-style: none; margin: 0; padding: 4px 16px 0; display: grid; }
+.gates li { display: grid; grid-template-columns: minmax(0, 1.4fr) 90px 84px; gap: 4px 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.gates li:last-child { border-bottom: 0; }
+.gate-main { display: grid; gap: 1px; min-width: 0; }
+.gate-main b { font-size: 14px; }
+.gate-main span { font-size: 12px; }
+.gate-val { font-family: var(--f-display); font-weight: 750; font-size: 22px; text-align: right; font-variant-numeric: tabular-nums; }
+.gates li .chip { justify-self: end; font-weight: 700; letter-spacing: 0.03em; }
+.gate-sub { grid-column: 1 / -1; font-size: 12px; margin-top: -2px; }
+.phases { margin: 0; padding: 12px 16px 14px; font-size: 13px; color: var(--ink-2); border-top: 1px dashed var(--line); background: var(--surface-2); border-radius: 0 0 var(--r-l) var(--r-l); }
+@media (max-width: 520px) { .gates li { grid-template-columns: minmax(0, 1fr) auto; } .gate-val { grid-column: 1; text-align: left; } .gates li .chip { grid-column: 2; grid-row: 1; } }

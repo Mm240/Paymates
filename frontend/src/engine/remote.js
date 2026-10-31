@@ -67,7 +67,7 @@ export const remoteEngine = {
   },
   hisaab: (mid) => json(`/api/merchants/${mid}/hisaab`, { method: 'POST' }),
   policy: () => json('/api/policy'),
-  evals: () => json('/api/evals'),
+  evals: (rulesOnly = false) => json(rulesOnly ? '/api/evals?rules_only=true' : '/api/evals'),
   setPolicy: (level, changedBy = 'Ops') => json('/api/policy', { method: 'POST', body: JSON.stringify({ autonomy_level: level, changed_by: changedBy }) }),
   metrics: () => json('/api/metrics'),
   tickets: () => json('/api/tickets'),

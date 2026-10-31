@@ -52,6 +52,19 @@ SEED = load_shared("seed.json")
 LEXICON = load_shared("lexicon.json")
 TEMPLATES = load_shared("templates.json")
 POLICY = SEED["policy"]
+PRICING = load_shared("pricing.json")
+
+
+def price_for(model: str) -> dict:
+    """The longest price-table key contained in the model name; unknown models use 'default'."""
+    hits = [k for k in PRICING["models"] if k in model.lower()]
+    return PRICING["models"][max(hits, key=len)] if hits else PRICING["default"]
+
+
+def cost_inr(model: str, input_tokens: int, output_tokens: int) -> float:
+    """₹ for one model call from the (editable) list-price table."""
+    p = price_for(model)
+    return (input_tokens * p["input"] + output_tokens * p["output"]) / 1_000_000 * PRICING["usd_inr"]
 
 # --------------------------------------------------------------------------
 # Providers. "openai" kind = OpenAI-compatible Chat Completions API, which

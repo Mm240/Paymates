@@ -134,7 +134,7 @@ async def build_briefing(store, merchant: dict, ticket_id: str, text: str, tri: 
                                           "facts only from the input, end with what decision is needed."},
             {"role": "user", "content": json.dumps({k: briefing[k] for k in ("merchant", "said", "intent", "checks", "proposed", "risk", "reason")},
                                                    ensure_ascii=False, default=str)},
-        ], max_tokens=180)
+        ], max_tokens=180, agent="escalation")
         if out["text"].strip():
             briefing["summary"] = out["text"].strip()
         return briefing, spec.label

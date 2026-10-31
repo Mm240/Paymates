@@ -28,7 +28,7 @@ pip install -r backend/requirements.txt
 cd backend && uvicorn app.main:app --port 8000
 ```
 
-**Run the tests:** `cd backend && python3 -m pytest -q` (117 tests) and `cd frontend && npm test` (68 tests for the in-browser engine, so both engines are held to the same behaviour).
+**Run the tests:** `cd backend && python3 -m pytest -q` (128 tests) and `cd frontend && npm test` (73 tests for the in-browser engine, so both engines are held to the same behaviour).
 
 ---
 
@@ -37,7 +37,7 @@ cd backend && uvicorn app.main:app --port 8000
 | View | What it shows |
 |---|---|
 | **Live desk** | Left: the merchant's phone chat (English, हिन्दी, Hinglish), with optional Soundbox-style voice replies a **PayMates check-in** button that finds and fixes problems before the merchant asks, and a **₹ Today's hisaab** chip: one message with today's UPI received (already in the bank), card/wallet pending (next working day) and what PayMates fixed, in the merchant's language. Every check-in ends with it. Centre: the **agent trace**, where each agent lights up live with the model it used, every tool call, the guardrail verdict, and timings. Right: the ticket outcome and today's scoreboard. |
-| **Ops dashboard** | The outcome metrics (including **Fixed before the merchant asked**), an **ROI calculator** (editable example assumptions → monthly/yearly savings in lakh/crore and specialist hours freed), a ribbon of every ticket coloured by outcome, the cumulative AI-resolution line, results by issue type, a traffic simulator, the model routing table, recent tickets and the audit log. |
+| **Ops dashboard** | The outcome metrics (including **Fixed before the merchant asked**), **unit economics** (AI cost per resolved ticket, % of steps handled by code at ₹0, AI vs human cost per ticket), a **Pilot readiness** panel (five gates with live values and PASS / NOT YET chips, plus the rollout phases), an **ROI calculator** (editable example assumptions → monthly/yearly savings in lakh/crore and specialist hours freed), a ribbon of every ticket coloured by outcome, the cumulative AI-resolution line, results by issue type, a traffic simulator, the model routing table, recent tickets and the audit log. |
 | **Human console** | The **Autonomy level** dial (Suggest only · Low · Standard), then escalated cases with a full briefing: what the merchant said, what PayMates already checked, why a human is needed, the exact action proposed, and any **similar past decision** a specialist made. **Approve and run** executes it and messages the merchant. |
 | **How it works** | Architecture (including the proactive Watcher), model routing, guardrails, the **Accuracy** test (45 labelled messages in English, Hindi and Hinglish), tech stack. |
 
@@ -87,6 +87,9 @@ cd backend && uvicorn app.main:app --port 8000
 
 **Optional: it asks instead of guessing (45s).** After **Reset demo**, on Raju's phone type *"Mera ek payment fail hua"*. PayMates doesn't touch anything: it asks for the **UTR (12 digits) or transaction ID** and shows quick chips. Tap **Transaction ID daalein**, send `T88120045`, and it continues the **same ticket** and recovers ₹1,250. Then type *"hi"* (a short greeting, no escalation) and *"Something is off with my account"* (one clarifying question with six topic chips, not an escalation).
    Say: "A teammate asks when it isn't sure. It doesn't move money on a guess."
+
+**Optional: unit economics and pilot gates (45s).** After **Run 25 tickets**, scroll to the three **unit economics** tiles and **Pilot readiness**. Before any traffic only the accuracy gate passes and the rest say NOT YET; after the simulator all five pass. In offline mode every cost is ₹0.00 because the rules engine makes no model calls, so for a real number run a few tickets with a model key set (see below) and read the same tiles. The **This ticket** panel shows each ticket's own AI cost, and the trace's Triage step says **Code path · ₹0** or **AI path**.
+   Say: "The rules engine handles what it's sure about for free. The model is only paid for when it's needed, and every rupee is counted."
 
 **Optional (if asked about accuracy):** **How it works → Run accuracy test.** 45 labelled messages, accuracy per language and which model answered. Be upfront: the rules engine scored 84% before its keywords were tuned on this set, so today's score is an upper bound.
 
@@ -215,7 +218,7 @@ Merchant chat (EN / हिन्दी / Hinglish)      Watcher (PayMates check-
 | Web | React 18, Vite, hand-built SVG charts, Web Speech API (voice replies + mic input) |
 | Prototype | The same agent logic in JavaScript (`frontend/src/engine/local.js`) so the app runs fully in the browser; optional Claude-driven mode |
 | Model Council | Parallel review with `asyncio.gather`; code auditors with veto + cross-provider model jurors; abstain on timeout |
-| Tests | pytest end-to-end scenarios, guardrails, council votes, simulation, LLM-failure fallback (117 pytest + 68 browser-engine tests) |
+| Tests | pytest end-to-end scenarios, guardrails, council votes, simulation, LLM-failure fallback (128 pytest + 73 browser-engine tests) |
 
 ---
 
@@ -229,7 +232,8 @@ paymates/
 │   ├── seed.json             simulated merchants, payments, settlements, refunds, help center
 │   ├── lexicon.json          Hinglish/Hindi keywords, synonyms, simulation messages
 │   ├── templates.json        reply templates in English, Hindi, Hinglish
-│   └── evals.json            45 labelled messages for the accuracy test
+│   ├── evals.json            45 labelled messages for the accuracy test
+│   └── pricing.json          example model list prices (editable) and the USD to INR rate
 ├── backend/
 │   ├── app/
 │   │   ├── main.py           FastAPI routes + SSE + serves the web app
@@ -272,6 +276,10 @@ Rebuild the web app after UI changes: `cd frontend && npm install && npm run bui
 **"Are these numbers real?"** No, and say so: all data is simulated. The point is the method. The same four metrics, computed the same way, can be rerun on real tickets. The 18-minute manual baseline is an assumption, labelled as one in the app.
 
 **"Would Paytm trust AI with money?"** It doesn't have to on day one. Ops controls the autonomy level in the Human console: at **Suggest only**, every money action needs a human, and PayMates still does the checking, explaining and ticketing. **Low** allows up to ₹1,000, **Standard** up to ₹5,000. Every change is audited, and the Model Council plus guardrails apply at every level.
+
+**"What does a ticket cost?"** Every model call is metered (provider, model, input and output tokens from the API's own usage fields, or characters/4 if a provider reports none) and priced from [shared/pricing.json](shared/pricing.json). **Those prices are example list prices, not verified: check your provider's price page and edit the file.** With `gemini-3.5-flash-lite` on every agent and those example prices, three real tickets (the scripted demos) measured **about ₹0.08 per ticket** (₹0.12 per resolved ticket, because one of the three needed a person). Offline it is ₹0.00. Most of the cost is the Action agent's tool loop (about 85%), which is the first thing to optimise. Triage is code-first: when the rules engine is 85%+ confident the model call is skipped.
+
+**"Is it ready for a pilot?"** The **Pilot readiness** panel lists the gates with live values: intent accuracy ≥ 90%, resolved without a human ≥ 70% (needs 10+ tickets), wrong payouts = 0 (autonomous credits/refunds above ₹5,000 or any payout made twice; needs at least one money move), AI cost per resolved ticket ≤ ₹1, and every escalation briefed in full. A gate with no data says NOT YET rather than passing. Rollout: Phase 1 Suggest only, 500 merchants, 4 weeks → Phase 2 up to ₹1,000 → Phase 3 up to ₹5,000. These pass on simulated data; the real gates need real tickets.
 
 **"Does it guess when it isn't sure?"** No. With no ID and no amount, it acts only if the merchant says money was taken and exactly one payment fits; otherwise it asks for the UTR or transaction ID. It remembers what it asked, so the next message (an ID, a UTR, an amount, or a chip) continues the same ticket in the same language. An ID that isn't on the merchant's account gets "please re-check", not an escalation; unclear messages get one clarifying question, and only a second unclear turn, three failed tries, or a request for a person brings in a human.
 

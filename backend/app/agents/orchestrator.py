@@ -18,6 +18,7 @@ import time
 from typing import Awaitable, Callable
 
 from .. import cards
+from ..llm import METER, Meter
 from ..config import POLICY, pacing_seconds
 from ..guardrails import mask_pii
 from ..store import Store, now_ms
@@ -87,7 +88,8 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
         store.insert("tickets", {"id": ticket_id, "merchant_id": merchant_id, "message": text, "lang": "en", "intent": None,
                                  "confidence": None, "status": "OPEN", "outcome": None, "summary": None, "reply": None,
                                  "created_at": created, "resolved_at": None, "duration_ms": None, "recovered_amount": 0,
-                                 "models": {}, "source": source, "subject": watch["subject"] if watch else None, "facts": {}})
+                                 "models": {}, "source": source, "subject": watch["subject"] if watch else None, "facts": {},
+                                 "ai_cost_inr": 0, "llm_calls": []})
     if watch:
         store.audit(ticket_id, "watcher", "noticed", {"kind": watch["kind"], "subject": watch["subject"], "title": watch["title"]})
     else:
@@ -96,6 +98,8 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
     await emit({"type": "ticket", "ticket": {"id": ticket_id, "merchant_id": merchant_id, "created_at": created, "message": text,
                                              "source": source, "resumed": bool(resume)}})
     models: dict[str, str] = {}
+    meter = Meter()                      # every model call this ticket makes, with tokens and ₹
+    METER.set(meter)
 
     async def step(agent: str, status: str, title: str, **extra):
         await emit({"type": "step", "agent": agent, "status": status, "title": title, **extra})
@@ -116,13 +120,13 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
     t0 = time.perf_counter()
     if watch:
         # The record says what the issue is; no model needed. Reply in the merchant's own language.
-        tri = {"intent": watch["intent"], "confidence": 1.0, "entities": watch["entities"],
+        tri = {"intent": watch["intent"], "confidence": 1.0, "entities": watch["entities"], "path": "code",
                "urgency": "high" if watch["kind"] != "soundbox" else "medium",
                "language": merchant["lang"], "reasoning": f"Raised by the watcher from {watch['subject']}"}
         models["triage"] = "watcher: from records"
     elif resume and resume["kind"] == "reference":
         # They answered the question we asked: same issue, now with the reference. No need to classify again.
-        tri = {"intent": resume["intent"], "confidence": 1.0, "entities": {**resume["entities"], **raw_ents}, "urgency": "high",
+        tri = {"intent": resume["intent"], "confidence": 1.0, "entities": {**resume["entities"], **raw_ents}, "urgency": "high", "path": "code",
                "language": followup_language(text, resume["language"]),
                "reasoning": f"Continuing the earlier question about {resume['intent'].replace('_', ' ').lower()}"}
         models["triage"] = "memory: pending question"
@@ -195,6 +199,7 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
 
     # 4. MODEL COUNCIL ----------------------------------------------------
     if runner.sessions:
+        models["council"] = f"3 auditors + {runner.sessions[-1]['jurors']} model juror(s)"
         seats = runner.sessions[-1]["votes"]
         held = [x for x in runner.sessions if not x["approved"]]
         await step("council", "blocked" if held else "done",
@@ -252,6 +257,10 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
                "outcome": act["outcome"], "summary": act["summary"], "reply": reply, "duration_ms": duration,
                "resolved_at": now_ms() if status == "RESOLVED_AI" else None, "recovered_amount": runner.recovered,
                "models": models, "card": card, "facts": {k: v for k, v in act["facts"].items() if isinstance(v, (str, int, float))}}
+    # AI cost: model calls only. Rules-engine, retrieval, guardrail and template steps cost ₹0. A resumed ticket keeps what it already cost.
+    prior = store.ticket(ticket_id) if resume else None
+    changes["ai_cost_inr"] = round((prior["ai_cost_inr"] or 0 if prior else 0) + meter.cost_inr, 6)
+    changes["llm_calls"] = (prior["llm_calls"] or [] if prior else []) + meter.calls
     store.update("tickets", ticket_id, changes)
     if remember and not watch:
         if act["outcome"] in ASK_REFERENCE:

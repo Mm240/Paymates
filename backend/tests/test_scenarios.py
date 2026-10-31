@@ -701,3 +701,132 @@ def test_messy_messages(item):
     assert r["intent"] == item["intent"], f'{item["text"]!r}: got {r["intent"]} ({r["confidence"]})'
     if item["intent"] not in ("UNKNOWN", "SMALL_TALK"):
         assert r["confidence"] >= 0.6
+
+
+# ---------------------------------------------------------------- unit economics
+def with_triage_model(monkeypatch, reply, usage="auto"):
+    """Give triage a model; every call it makes is counted. Returns the list of calls the fake provider received."""
+    from app import llm
+    from app.agents import triage as triage_mod
+    calls = []
+
+    async def fake(spec, messages, tools, json_mode, temperature, max_tokens):
+        calls.append(messages)
+        out = {"text": reply, "tool_calls": []}
+        if usage != "missing":
+            out["usage"] = {"input": 200, "output": 40, "estimated": False}
+        return out
+
+    monkeypatch.setattr(llm, "_openai_compatible", fake)
+    monkeypatch.setattr(triage_mod, "model_for", lambda agent: ModelSpec("gemini", "gemini-3.5-flash-lite", "openai", "", "k") if agent == "triage" else None)
+    return calls
+
+
+def test_price_table_uses_the_longest_matching_model_name():
+    from app.config import cost_inr, price_for
+    assert price_for("gemini-3.5-flash-lite")["output"] == 0.40          # not the pricier 'gemini-3.5-flash'
+    assert price_for("gemini-3.5-flash")["output"] == 2.50
+    assert price_for("some-unlisted-model") == price_for("nothing")      # falls back to the default row
+    assert cost_inr("gemini-3.5-flash-lite", 1_000_000, 0) == pytest.approx(0.10 * 88.0)
+    assert cost_inr("llama3.1", 5000, 5000) == 0                          # a local model is free
+
+
+def test_rules_engine_costs_nothing(store):
+    t, _ = run(store, "M1001", "Customer's payment failed but money was deducted.")
+    assert t["ai_cost_inr"] == 0 and t["llm_calls"] == []
+    m = ops.metrics(store)
+    assert m["ai_cost_total"] == 0 and m["ai_cost_per_resolved"] == 0 and m["code_steps_pct"] == 1.0 and m["llm_calls"] == 0
+
+
+def test_model_calls_are_metered_per_ticket_with_tokens_and_rupees(store, monkeypatch):
+    from app.config import cost_inr
+    calls = with_triage_model(monkeypatch, '{"intent": "SETTLEMENT_DELAY", "confidence": 0.8, "entities": {}, "urgency": "high"}')
+    t, ev = run(store, "M1001", "Kal ka settlement nahi aaya")              # 84%: not confident enough for the code path
+    assert len(calls) == 1 and len(t["llm_calls"]) == 1
+    c = t["llm_calls"][0]
+    assert (c["agent"], c["provider"], c["model"], c["input_tokens"], c["output_tokens"], c["estimated"]) == \
+        ("triage", "gemini", "gemini-3.5-flash-lite", 200, 40, False)
+    assert t["ai_cost_inr"] > 0 and t["ai_cost_inr"] == pytest.approx(cost_inr("gemini-3.5-flash-lite", 200, 40), rel=1e-4)
+    m = ops.metrics(store)
+    assert m["llm_calls"] == 1 and m["ai_cost_per_resolved"] == pytest.approx(t["ai_cost_inr"], rel=1e-4)
+    assert 0 < m["llm_steps"] < m["steps_total"] and m["code_steps_pct"] < 1                # most steps stayed code
+
+
+def test_tokens_are_estimated_from_characters_when_the_provider_reports_none(store, monkeypatch):
+    with_triage_model(monkeypatch, '{"intent": "SETTLEMENT_DELAY", "confidence": 0.8, "entities": {}}', usage="missing")
+    t, _ = run(store, "M1001", "Kal ka settlement nahi aaya")
+    c = t["llm_calls"][0]
+    assert c["estimated"] is True and c["input_tokens"] > 0 and c["output_tokens"] > 0 and t["ai_cost_inr"] > 0
+
+
+def test_code_first_skips_the_model_when_rules_are_confident(store, monkeypatch):
+    calls = with_triage_model(monkeypatch, '{"intent": "FAILED_PAYMENT", "confidence": 0.9, "entities": {}}')
+    t, ev = run(store, "M1001", "Customer's payment failed but money was deducted.")     # 97% from the rules alone
+    assert calls == [] and t["llm_calls"] == [] and t["ai_cost_inr"] == 0
+    triage_step = next(e for e in ev if e["type"] == "step" and e["agent"] == "triage" and e["status"] == "done")
+    assert triage_step["data"]["path"] == "code" and "code path" in triage_step["model"] and "97% ≥ 85%" in triage_step["model"]
+    assert t["outcome"] == "PAYMENT_RECOVERED"                                            # demo 1 unchanged
+
+
+def test_unsure_messages_take_the_ai_path(store, monkeypatch):
+    calls = with_triage_model(monkeypatch, '{"intent": "SETTLEMENT_DELAY", "confidence": 0.8, "entities": {}}')
+    t, ev = run(store, "M1001", "Kal ka settlement nahi aaya")
+    triage_step = next(e for e in ev if e["type"] == "step" and e["agent"] == "triage" and e["status"] == "done")
+    assert len(calls) == 1 and triage_step["data"]["path"] == "ai" and triage_step["model"].startswith("gemini:")
+    assert t["outcome"] == "SETTLEMENT_RETRIED"                                           # demo 2 unchanged
+
+
+def test_a_resumed_ticket_keeps_the_cost_it_already_had(store, monkeypatch):
+    with_triage_model(monkeypatch, '{"intent": "FAILED_PAYMENT", "confidence": 0.8, "entities": {}}')
+    first, _ = run(store, "M1001", "Mera ek payment fail hua")
+    second, _ = run(store, "M1001", "T88120045")
+    assert second["id"] == first["id"] and first["ai_cost_inr"] > 0 and second["ai_cost_inr"] >= first["ai_cost_inr"]
+
+
+# ---------------------------------------------------------------- pilot gates data
+def test_pilot_numbers_after_the_three_demos(store):
+    run(store, "M1001", "Customer's payment failed but money was deducted.")
+    run(store, "M1001", "Kal ka settlement nahi aaya")
+    run(store, "M1002", "Customer says refund not received.")
+    p = ops.metrics(store)["pilot"]
+    assert p["autonomous_payouts"] == 2 and p["wrong_payouts"] == 0                       # the ₹18,640 retry is allowed by policy
+    assert p["blocked_unsafe"] == 1                                                       # the ₹7,800 refund was stopped
+    assert (p["escalations"], p["escalations_briefed"]) == (1, 1)
+
+
+def test_a_wrong_payout_would_be_counted(store):
+    run(store, "M1001", "Customer's payment failed but money was deducted.")
+    store.audit(None, "action-agent", "reinitiate_refund", {"args": {"refund_id": "R77812"}, "allowed": True, "rule": "x", "reason": "x"})   # ₹7,800, above the limit
+    assert ops.metrics(store)["pilot"]["wrong_payouts"] == 1
+
+
+def test_evals_rules_only_never_calls_a_model(monkeypatch):
+    from app import evals
+    called = []
+
+    async def boom(text):
+        called.append(text)
+        raise AssertionError("model path must not run")
+
+    monkeypatch.setattr(evals, "triage", boom)
+    out = asyncio.run(evals.run_evals(rules_only=True))
+    assert called == [] and out["models"] == {"rules-engine": 45} and out["accuracy"] >= 0.9
+
+
+def test_juror_is_not_told_the_credit_limit_applies_to_a_payout_retry(store, monkeypatch):
+    """Regression: a live model held every ₹18,640 settlement retry because its brief said 'limit ₹5,000'."""
+    from app import council
+    seen = []
+
+    async def fake_chat(spec, messages, **kw):
+        seen.append(_json.loads(messages[-1]["content"]))
+        return {"text": '{"vote": "APPROVE", "reason": "evidence fits"}', "tool_calls": []}
+
+    monkeypatch.setattr(council, "chat", fake_chat)
+    monkeypatch.setattr(council, "jurors", lambda: [ModelSpec("gemini", "m", "openai", "", "k")])
+    asyncio.run(council.review(store, "M1001", "retry_settlement", {"settlement_id": "S2610300"}, "same verified account"))
+    store.update("transactions", "T88120045", {"bank_checked": 1})
+    asyncio.run(council.review(store, "M1001", "mark_payment_recovered", {"txn_id": "T88120045"}, "within limit"))
+    retry, credit = seen
+    assert "autonomous_limit_inr" not in retry["policy"] and "OWN verified bank account" in retry["policy"]["rule"]
+    assert credit["policy"]["autonomous_limit_inr"] == 5000                                 # credits and refunds keep the cap

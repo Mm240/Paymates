@@ -31,6 +31,9 @@ export const GREETING = {
 const LANG_TAG = { hinglish: 'Hinglish', en: 'English', hi: 'हिन्दी' }
 const isDeva = (t) => /[ऀ-ॿ]/.test(t || '')
 
+// ₹ for AI cost, which is often a fraction of a paisa: show enough digits to be honest.
+export const fmtAiCost = (v) => (v == null ? '–' : v === 0 ? '₹0.00' : v < 0.01 ? `₹${v.toFixed(4)}` : `₹${v.toFixed(2)}`)
+
 // ====================================================================== rich reply card (generative UI, built from facts)
 const lbl = (key, lang) => { const t = TPL.cards.labels[key]; return t ? t[lang] || t.en : key }
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -415,6 +418,7 @@ function StageBody({ k, s, tools, reply }) {
           <span className="chip sky">{INTENT_LABEL[d.intent] || d.intent}</span>
           <span className="chip">{{ en: 'English', hi: 'Hindi', hinglish: 'Hinglish' }[d.language]}</span>
           <span className={`chip ${d.urgency === 'high' ? 'hold' : ''}`}>{d.urgency} urgency</span>
+          {d.path && <span className={`chip ${d.path === 'code' ? 'ok' : 'sky'}`} title={d.path === 'code' ? 'The rules engine was confident enough, so no model was called' : 'The rules engine was unsure, so a model was called'}>{d.path === 'code' ? 'Code path · ₹0' : 'AI path'}</span>}
           {Object.entries(d.entities || {}).map(([key, v]) => <span key={key} className="chip mono">{key}: {key === 'amount' ? inr(v) : v}</span>)}
         </div>
         <div>
@@ -562,6 +566,11 @@ export function OutcomeSide({ trace, metrics, openQueue, goDashboard, onConsole 
               <div className="fact"><small>Money recovered</small><b>{inr(t.recovered_amount || 0)}</b></div>
               <div className="fact"><small>Tool calls</small><b className="num">{tools.length}</b></div>
               <div className="fact"><small>Actions taken</small><b className="num">{writes}</b></div>
+              <div className="fact" style={{ gridColumn: '1 / -1' }}>
+                <small>AI cost</small>
+                <b className="num">{fmtAiCost(t.ai_cost_inr ?? 0)}</b>
+                <small style={{ display: 'inline', marginLeft: 8 }}>{(t.llm_calls || []).length ? `${t.llm_calls.length} model call${t.llm_calls.length === 1 ? '' : 's'} · the rest ran as code (₹0)` : 'No model calls · ran as code (₹0)'}</small>
+              </div>
             </div>
             {t.status === 'ESCALATED' && (
               <button className="btn primary" onClick={onConsole}>Open human console</button>

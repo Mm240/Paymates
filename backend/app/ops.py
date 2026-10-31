@@ -9,6 +9,7 @@ from . import cards, council
 from .config import LEXICON, POLICY, TEMPLATES
 from .store import Store, now_ms
 from .text import inr, render
+from .guardrails import MONEY_TOOLS
 from .tools import ToolRunner
 
 Emit = Callable[[dict], Awaitable[None]]
@@ -28,6 +29,33 @@ def metrics(store: Store) -> dict:
         b["total"] += 1
         b["ai"] += t["status"] == "RESOLVED_AI"
     manual = POLICY["manual_minutes_per_ticket"]
+
+    # Unit economics: model calls only. Rules, retrieval, guardrails and templates are code and cost ₹0.
+    cost_total = sum(float(t["ai_cost_inr"] or 0) for t in ts)
+    steps = llm_steps = llm_calls = 0
+    for t in ts:
+        models, calls = t["models"] or {}, t["llm_calls"] or []
+        steps += len(models)
+        llm_steps += len({c["agent"] for c in calls} & set(models))
+        llm_calls += len(calls)
+
+    # Pilot gates: were any autonomous payouts wrong (above the hard limit, or paid twice), and how many unsafe ones were stopped?
+    paid, autonomous, wrong, blocked = set(), 0, 0, 0
+    for row in store.all("SELECT actor, action, detail FROM audit WHERE action IN (%s)" % ",".join("?" for _ in MONEY_TOOLS), tuple(MONEY_TOOLS)):
+        d = row["detail"] or {}
+        if not d.get("allowed"):
+            blocked += 1
+            continue
+        args = d.get("args") or {}
+        key = (row["action"], council.record_key(args))
+        if row["actor"] == "action-agent":
+            autonomous += 1
+            # The ₹5,000 cap is for credits and refunds. A payout retry goes to the merchant's own verified account and is not capped.
+            wrong += row["action"] != "retry_settlement" and council.amount_of(store, row["action"], args) > POLICY["auto_money_limit"]
+        wrong += key in paid
+        paid.add(key)
+    escs = store.escalations(limit=100000)
+    briefed = sum(1 for e in escs if (e["briefing"] or {}).get("summary") and (e["briefing"] or {}).get("said") and (e["briefing"] or {}).get("reason"))
     return {
         "total": total,
         "resolved_ai": ai,
@@ -40,6 +68,15 @@ def metrics(store: Store) -> dict:
         "manual_minutes_baseline": manual,
         "recovered_value": sum(t["recovered_amount"] or 0 for t in ts),
         "hours_saved": round(ai * manual / 60, 1),
+        "ai_cost_total": round(cost_total, 6),
+        "ai_cost_per_resolved": round(cost_total / ai, 6) if ai else None,
+        "ai_cost_per_ticket": round(cost_total / total, 6) if total else None,
+        "llm_calls": llm_calls,
+        "steps_total": steps, "llm_steps": llm_steps,
+        "code_steps_pct": round(1 - llm_steps / steps, 4) if steps else None,
+        "human_cost_per_ticket": POLICY["human_cost_per_ticket_inr"],
+        "pilot": {"autonomous_payouts": autonomous, "wrong_payouts": int(wrong), "blocked_unsafe": blocked,
+                  "escalations": len(escs), "escalations_briefed": briefed},
         "proactive_fixed": sum(1 for t in ts if t["source"] == "proactive" and t["status"] == "RESOLVED_AI"),
         "by_intent": by_intent,
         "series": [{"i": i + 1, "status": t["status"], "intent": t["intent"], "source": t["source"]} for i, t in enumerate(ts)],

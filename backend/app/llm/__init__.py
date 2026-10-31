@@ -18,15 +18,43 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
+from contextvars import ContextVar
 from typing import Any, Optional
 
 import httpx
 
-from ..config import LLM_TIMEOUT, ModelSpec
+from ..config import LLM_TIMEOUT, ModelSpec, cost_inr
 
 
 class LLMError(Exception):
     pass
+
+
+class Meter:
+    """Every model call one ticket makes: who, which model, tokens, and what it cost. Code-only steps never appear here (₹0)."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    def add(self, agent: str, spec: ModelSpec, usage: dict, ms: int) -> None:
+        self.calls.append({"agent": agent or "llm", "provider": spec.provider, "model": spec.model,
+                           "input_tokens": usage["input"], "output_tokens": usage["output"], "estimated": usage["estimated"],
+                           "cost_inr": round(cost_inr(spec.model, usage["input"], usage["output"]), 6), "ms": ms})
+
+    @property
+    def cost_inr(self) -> float:
+        return sum(c["cost_inr"] for c in self.calls)
+
+
+METER: ContextVar[Optional[Meter]] = ContextVar("paymates_meter", default=None)
+
+
+def _estimate(messages: list[dict], tools: Optional[list[dict]], out: dict) -> dict:
+    """chars / 4 when the provider does not report usage."""
+    chars_in = len(json.dumps(messages, ensure_ascii=False, default=str)) + len(json.dumps(tools or [], ensure_ascii=False))
+    chars_out = len(out.get("text") or "") + len(json.dumps(out.get("tool_calls") or [], ensure_ascii=False))
+    return {"input": max(1, chars_in // 4), "output": max(1, chars_out // 4), "estimated": True}
 
 
 class RateLimited(LLMError):
@@ -43,12 +71,19 @@ async def chat(
     json_mode: bool = False,
     temperature: float = 0.2,
     max_tokens: int = 900,
+    agent: str = "",
 ) -> dict:
     for attempt in (1, 2):
         try:
+            t0 = time.perf_counter()
             if spec.kind == "anthropic":
-                return await _anthropic(spec, messages, tools, temperature, max_tokens)
-            return await _openai_compatible(spec, messages, tools, json_mode, temperature, max_tokens)
+                out = await _anthropic(spec, messages, tools, temperature, max_tokens)
+            else:
+                out = await _openai_compatible(spec, messages, tools, json_mode, temperature, max_tokens)
+            usage = out.pop("usage", None) or _estimate(messages, tools, out)
+            if meter := METER.get():
+                meter.add(agent, spec, usage, int((time.perf_counter() - t0) * 1000))
+            return out
         except RateLimited:
             # Free tiers rate-limit in bursts: wait once, then let the caller fall back to rules.
             if attempt == 2:
@@ -123,7 +158,9 @@ async def _openai_compatible(spec, messages, tools, json_mode, temperature, max_
         if tc.get("extra_content"):
             call["extra"] = tc["extra_content"]
         calls.append(call)
-    return {"text": msg.get("content") or "", "tool_calls": calls}
+    u = data.get("usage") or {}
+    usage = {"input": int(u["prompt_tokens"]), "output": int(u.get("completion_tokens") or 0), "estimated": False} if u.get("prompt_tokens") is not None else None
+    return {"text": msg.get("content") or "", "tool_calls": calls, "usage": usage}
 
 
 # ---------------------------------------------------------------- Anthropic
@@ -174,7 +211,9 @@ async def _anthropic(spec, messages, tools, temperature, max_tokens) -> dict:
     text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
     calls = [{"id": b["id"], "name": b["name"], "args": b.get("input") or {}}
              for b in data.get("content", []) if b.get("type") == "tool_use"]
-    return {"text": text, "tool_calls": calls}
+    u = data.get("usage") or {}
+    usage = {"input": int(u["input_tokens"]), "output": int(u.get("output_tokens") or 0), "estimated": False} if u.get("input_tokens") is not None else None
+    return {"text": text, "tool_calls": calls, "usage": usage}
 
 
 # ---------------------------------------------------------------- helpers

@@ -139,7 +139,7 @@ async def ask_juror(spec: ModelSpec, case: dict) -> dict:
     try:
         out = await asyncio.wait_for(
             chat(spec, [{"role": "system", "content": JUROR_PROMPT}, {"role": "user", "content": json.dumps(case, default=str)}],
-                 json_mode=True, temperature=0, max_tokens=120),
+                 json_mode=True, temperature=0, max_tokens=120, agent="council"),
             timeout=LLM_TIMEOUT)
         data = parse_json(out["text"])
         vote = "HOLD" if str(data.get("vote", "")).upper().startswith("HOLD") else "APPROVE"
@@ -162,6 +162,14 @@ def evidence(store: Store, name: str, args: dict) -> dict:
     return {k: r[k] for k in ("id", "amount", "status", "reason", "txn_id")}
 
 
+def juror_policy(name: str, guard_reason: str) -> dict:
+    """What the jurors are told the rules are. The ₹5,000 cap is for credits and refunds; a payout retry is not capped."""
+    if name == "retry_settlement":
+        return {"rule": "Re-sending a held payout to the merchant's OWN verified bank account. The credit/refund limit does not apply to it. "
+                        "Judge only whether the evidence supports the retry.", "guardrail_verdict": guard_reason}
+    return {"autonomous_limit_inr": POLICY["auto_money_limit"], "guardrail_verdict": guard_reason}
+
+
 # ---------------------------------------------------------------- session
 async def review(store: Store, merchant_id: str, name: str, args: dict, guard_reason: str) -> dict:
     t0 = time.perf_counter()
@@ -170,7 +178,7 @@ async def review(store: Store, merchant_id: str, name: str, args: dict, guard_re
     panel = jurors()
     if panel:
         case = {"action": name, "args": args, "amount_inr": amount_of(store, name, args), "evidence": evidence(store, name, args),
-                "policy": {"autonomous_limit_inr": POLICY["auto_money_limit"], "guardrail_verdict": guard_reason}}
+                "policy": juror_policy(name, guard_reason)}
         votes += await asyncio.gather(*(ask_juror(s, case) for s in panel))
 
     auditor_veto = [v for v in votes if v["kind"] == "auditor" and v["vote"] == "HOLD"]

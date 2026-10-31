@@ -297,7 +297,7 @@ export default function App() {
           </div>
         )}
         {view === 'dashboard' && (
-          <Dashboard metrics={metrics} tickets={tickets} audit={audit} info={info} onSimulate={simulate} simState={sim} onReset={reset} />
+          <Dashboard metrics={metrics} tickets={tickets} audit={audit} info={info} onSimulate={simulate} simState={sim} onReset={reset} onEvals={() => engineRef.current.evals(true)} />
         )}
         {view === 'console' && <HumanConsole escalations={escalations} onDecide={decide} busyId={decidingId} policy={policy} onPolicy={changePolicy} />}
         {view === 'how' && <HowItWorks info={info} onEvals={() => engineRef.current.evals()} />}

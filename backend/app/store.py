@@ -41,7 +41,7 @@ CREATE TABLE tickets (
   id TEXT PRIMARY KEY, merchant_id TEXT, message TEXT, lang TEXT, intent TEXT, confidence REAL,
   status TEXT, outcome TEXT, summary TEXT, reply TEXT, created_at INTEGER, resolved_at INTEGER,
   duration_ms INTEGER, recovered_amount INTEGER DEFAULT 0, models TEXT, source TEXT,
-  subject TEXT, facts TEXT, card TEXT
+  subject TEXT, facts TEXT, card TEXT, ai_cost_inr REAL DEFAULT 0, llm_calls TEXT
 );
 CREATE TABLE ops_tickets (
   id TEXT PRIMARY KEY, merchant_id TEXT, category TEXT, priority TEXT, summary TEXT,
@@ -66,7 +66,7 @@ CREATE TABLE messages (
 );
 """
 
-JSON_COLS = {"kyc_missing", "soundbox", "models", "briefing", "proposed_action", "detail", "facts", "card"}
+JSON_COLS = {"kyc_missing", "soundbox", "models", "briefing", "proposed_action", "detail", "facts", "card", "llm_calls"}
 BOOL_COLS = {"bank_verified", "bank_debited", "recovered", "bank_checked"}
 
 

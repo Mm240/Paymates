@@ -27,7 +27,9 @@
     "retryable_hold_reasons": [
       "BANK_TIMEOUT"
     ],
-    "currency": "INR"
+    "currency": "INR",
+    "code_first_confidence": 0.85,
+    "human_cost_per_ticket_inr": 50
   },
   "merchants": [
     {

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 
-from ..config import LEXICON, model_for
+from ..config import LEXICON, POLICY, model_for
 from ..llm import chat, parse_json
 from ..rag import index
 from ..text import detect_language, extract_entities, keyword_hits, small_talk_kind
@@ -102,13 +102,16 @@ def with_raw_entities(tri: dict, raw_text: str) -> dict:
 
 async def triage(text: str) -> tuple[dict, str]:
     """Returns (result, model_label)."""
-    rules = rules_triage(text)
+    rules = {**rules_triage(text), "path": "code"}
     spec = model_for("triage")
     if not spec or rules["intent"] == "SMALL_TALK":
         return rules, "rules-engine"
+    # Code first: when the rules engine is already confident, the model call is skipped (₹0). Models only handle the unsure cases.
+    if rules["intent"] != "UNKNOWN" and rules["confidence"] >= POLICY["code_first_confidence"]:
+        return rules, f"rules-engine · code path ({int(rules['confidence'] * 100)}% ≥ {int(POLICY['code_first_confidence'] * 100)}%)"
     try:
         out = await chat(spec, [{"role": "system", "content": SYSTEM}, {"role": "user", "content": text}],
-                         json_mode=True, max_tokens=300)
+                         json_mode=True, max_tokens=300, agent="triage")
         data = parse_json(out["text"])
         intent = str(data.get("intent", "")).upper()
         if intent not in INTENTS:
@@ -129,6 +132,7 @@ async def triage(text: str) -> tuple[dict, str]:
             "urgency": data.get("urgency") or rules["urgency"],
             "language": rules["language"],
             "reasoning": str(data.get("reasoning", ""))[:160],
+            "path": "ai",
         }, spec.label
     except Exception as exc:  # fall back, never fail the ticket
         rules["reasoning"] += f" (LLM unavailable: {str(exc)[:80]})"

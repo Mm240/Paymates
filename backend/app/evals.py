@@ -8,18 +8,19 @@ from __future__ import annotations
 
 import time
 
-from .agents.triage import triage
+from .agents.triage import rules_triage, triage
 from .config import load_shared
 
 EVALS = load_shared("evals.json")["items"]
 
 
-async def run_evals() -> dict:
+async def run_evals(rules_only: bool = False) -> dict:
     t0 = time.perf_counter()
     by_lang: dict[str, dict] = {}
     failures, models = [], {}
     for x in EVALS:
-        r, model = await triage(x["text"])
+        # rules_only: the code path alone (free and instant), used by the pilot-readiness gate on every dashboard load
+        r, model = (rules_triage(x["text"]), "rules-engine") if rules_only else await triage(x["text"])
         models[model] = models.get(model, 0) + 1
         hit = r["intent"] == x["intent"]
         b = by_lang.setdefault(x["lang"], {"n": 0, "correct": 0})

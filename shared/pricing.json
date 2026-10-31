@@ -1,0 +1,76 @@
+{
+  "_note": "EXAMPLE list prices in USD per 1M tokens, not verified against any provider's price page. Check your own provider's pricing and edit this file. A model with no match uses 'default'. Rules-engine and code-only steps cost 0.",
+  "label": "list price, edit",
+  "unit": "USD per 1M tokens",
+  "usd_inr": 88.0,
+  "default": {
+    "input": 0.3,
+    "output": 1.5
+  },
+  "models": {
+    "gemini-3.5-flash-lite": {
+      "input": 0.1,
+      "output": 0.4
+    },
+    "gemini-flash-lite": {
+      "input": 0.1,
+      "output": 0.4
+    },
+    "gemini-2.5-flash-lite": {
+      "input": 0.1,
+      "output": 0.4
+    },
+    "gemini-3.5-flash": {
+      "input": 0.3,
+      "output": 2.5
+    },
+    "gemini-flash": {
+      "input": 0.3,
+      "output": 2.5
+    },
+    "gemini-2.5-flash": {
+      "input": 0.3,
+      "output": 2.5
+    },
+    "gemini-pro": {
+      "input": 1.25,
+      "output": 10.0
+    },
+    "claude-haiku": {
+      "input": 1.0,
+      "output": 5.0
+    },
+    "claude-sonnet": {
+      "input": 3.0,
+      "output": 15.0
+    },
+    "claude · quick tier": {
+      "input": 1.0,
+      "output": 5.0
+    },
+    "claude · default tier": {
+      "input": 3.0,
+      "output": 15.0
+    },
+    "gpt-4.1-mini": {
+      "input": 0.4,
+      "output": 1.6
+    },
+    "gpt-4.1": {
+      "input": 2.0,
+      "output": 8.0
+    },
+    "llama-3.1-8b": {
+      "input": 0.05,
+      "output": 0.08
+    },
+    "llama-3.3-70b": {
+      "input": 0.59,
+      "output": 0.79
+    },
+    "llama3.1": {
+      "input": 0.0,
+      "output": 0.0
+    }
+  }
+}

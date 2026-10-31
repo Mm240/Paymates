@@ -148,9 +148,9 @@ def merchant_hisaab(mid: str):
 
 
 @app.get("/api/evals")
-async def evals():
-    """Triage accuracy on 45 labelled messages (15 English, 15 Hindi, 15 Hinglish)."""
-    return await run_evals()
+async def evals(rules_only: bool = False):
+    """Triage accuracy on 45 labelled messages (15 English, 15 Hindi, 15 Hinglish). rules_only skips the models (free, instant)."""
+    return await run_evals(rules_only)
 
 
 @app.get("/api/tickets")

@@ -238,6 +238,63 @@ for (const m of messy) {
   })
 }
 
+// ---- unit economics + pilot gates (mirrors the pytest cases)
+await test('price table: longest matching model name wins; local models are free', () => {
+  assert.equal(E.priceFor('gemini-3.5-flash-lite').output, 0.4)
+  assert.equal(E.priceFor('gemini-3.5-flash').output, 2.5)
+  assert.ok(Math.abs(E.costInr('gemini-3.5-flash-lite', 1e6, 0) - 0.1 * 88) < 1e-9)
+  assert.equal(E.costInr('llama3.1', 5000, 5000), 0)
+})
+
+await test('rules engine costs nothing: ₹0 per ticket, 100% of steps by code', async () => {
+  await fresh()
+  const t = await chat('M1001', "Customer's payment failed but money was deducted.")
+  assert.deepEqual([t.ai_cost_inr, t.llm_calls.length], [0, 0])
+  const m = await E.localEngine.metrics()
+  assert.deepEqual([m.ai_cost_total, m.ai_cost_per_resolved, m.code_steps_pct, m.llm_calls], [0, 0, 1, 0])
+})
+
+await test('pilot numbers after the three demos: 2 autonomous payouts, 0 wrong, 1 blocked, 1/1 escalation briefed', async () => {
+  await fresh()
+  await chat('M1001', "Customer's payment failed but money was deducted.")
+  await chat('M1001', 'Kal ka settlement nahi aaya')
+  await chat('M1002', 'Customer says refund not received.')
+  const p = (await E.localEngine.metrics()).pilot
+  assert.deepEqual(p, { autonomous_payouts: 2, wrong_payouts: 0, blocked_unsafe: 1, escalations: 1, escalations_briefed: 1 })
+})
+
+await test('rules-only evals never touch a model and clear 90%', async () => {
+  const out = await E.runEvals(true)
+  assert.deepEqual(out.models, { 'rules-engine': 45 })
+  assert.ok(out.accuracy >= 0.9)
+})
+
+await test('live model: code path skips the call (₹0); the unsure path is metered with tokens and ₹', async () => {
+  const calls = []
+  const fake = async (prompt) => { calls.push('text'); return { text: '{"outcome":"resolved","summary":"ok"}' } }
+  fake.json = async () => { calls.push('json'); return { intent: 'SETTLEMENT_DELAY', confidence: 0.8, entities: {}, urgency: 'high', reasoning: 'x' } }
+  fake.limits = async () => ({})
+  globalThis.window = { claude: { use: async () => fake } }
+  try {
+    E.localEngine.setLive(true)
+    await fresh()
+    const confident = await chat('M1001', "Customer's payment failed but money was deducted.") // 97% from the rules alone
+    assert.equal(confident.llm_calls.filter((c) => c.agent === 'triage').length, 0)
+    await fresh()
+    const unsure = await chat('M1001', 'Kal ka settlement nahi aaya') // 84%: not confident enough for the code path
+    const tri = unsure.llm_calls.find((c) => c.agent === 'triage')
+    assert.ok(tri, 'triage should have called the model')
+    assert.deepEqual([tri.provider, tri.model, tri.estimated], ['claude', 'claude · quick tier', true])
+    assert.ok(tri.input_tokens > 0 && tri.output_tokens > 0 && tri.cost_inr > 0)
+    assert.ok(Math.abs(unsure.ai_cost_inr - unsure.llm_calls.reduce((t, c) => t + c.cost_inr, 0)) < 1e-6)
+    const m = await E.localEngine.metrics()
+    assert.ok(m.llm_calls >= 1 && m.ai_cost_total > 0)
+  } finally {
+    E.localEngine.setLive(false)
+    delete globalThis.window
+  }
+})
+
 await vite.close()
 for (const [s, n, m] of results) console.log(`${s === 'ok' ? '  ok  ' : '  FAIL'} ${n}${m ? `\n        ${m}` : ''}`)
 const failed = results.filter((r) => r[0] !== 'ok').length

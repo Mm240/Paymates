@@ -348,7 +348,7 @@ async def run_llm(spec, run: ToolRunner, store: Store, tri: dict, ctx: dict, tex
     tools = tool_specs()
     final: dict = {}
     for _ in range(7):
-        out = await chat(spec, messages, tools=tools, max_tokens=700)
+        out = await chat(spec, messages, tools=tools, max_tokens=700, agent="action")
         if not out["tool_calls"]:
             try:
                 final = parse_json(out["text"])

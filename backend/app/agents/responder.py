@@ -39,7 +39,7 @@ async def respond(outcome: str, facts: dict, lang: str, text: str) -> tuple[str,
                 f"natural and warm in {LANG_NAMES.get(lang, 'English')}. Keep it under 70 words. Keep every amount, ID and reference "
                 "EXACTLY as written. Do not add facts, promises or links. Reply with only the message text.")},
             {"role": "user", "content": f"Merchant wrote: {text}\n\nDRAFT: {draft}"},
-        ], temperature=0.4, max_tokens=260)
+        ], temperature=0.4, max_tokens=260, agent="responder")
         candidate = out["text"].strip().strip('"')
         if candidate and grounded(draft, candidate):
             return candidate, spec.label, True

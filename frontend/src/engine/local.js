@@ -4,6 +4,7 @@
 // produced by Claude through the page's sample capability, with page functions as tools.
 import seed from '../../../shared/seed.json'
 import evalSet from '../../../shared/evals.json'
+import pricing from '../../../shared/pricing.json'
 import {
   LEX, TPL, tokens, detectLanguage, keywordHits, extractEntities, smallTalkKind, inr, phrase, fill, render, ago, maskPii,
   HelpCenterIndex, LANG_LABEL,
@@ -290,6 +291,13 @@ function auditVelocity(mid, prior, name, a) {
     ? seat('Velocity auditor', 'velocity', 'auditor', 'HOLD', `${inr(total)} in 24h would pass the ${inr(cap)} ${tier}`)
     : seat('Velocity auditor', 'velocity', 'auditor', 'APPROVE', `${inr(total)} of the ${inr(cap)} ${tier} used after this`)
 }
+// What the jurors are told the rules are. The ₹5,000 cap is for credits and refunds; a payout retry is not capped.
+function jurorPolicy(name, guardReason) {
+  if (name === 'retry_settlement') {
+    return { rule: "Re-sending a held payout to the merchant's OWN verified bank account. The credit/refund limit does not apply to it. Judge only whether the evidence supports the retry.", guardrail_verdict: guardReason }
+  }
+  return { autonomous_limit_inr: LIMIT, guardrail_verdict: guardReason }
+}
 async function askClaudeJuror(name, a, guardReason) {
   const t0 = performance.now()
   const s = await getSample()
@@ -297,7 +305,7 @@ async function askClaudeJuror(name, a, guardReason) {
     const ev = name === 'mark_payment_recovered' ? S.txns.get(String(a.txn_id)) : name === 'retry_settlement' ? S.settlements.get(String(a.settlement_id)) : S.refunds.get(String(a.refund_id))
     const data = await s.json('You are one juror on a payments safety council. An autonomous support agent wants to move money. Decide independently whether the EVIDENCE fully supports the ACTION. ' +
       'Vote HOLD if anything is missing, inconsistent, or suspicious; otherwise APPROVE. Reply with only JSON: {"vote": "APPROVE" | "HOLD", "reason": "<= 18 words"}\n\n' +
-      JSON.stringify({ action: name, args: a, amount_inr: amountOf(name, a), evidence: { ...ev, payer: undefined }, policy: { autonomous_limit_inr: LIMIT, guardrail_verdict: guardReason } }),
+      JSON.stringify({ action: name, args: a, amount_inr: amountOf(name, a), evidence: { ...ev, payer: undefined }, policy: jurorPolicy(name, guardReason) }),
     { modelTier: 'quick' })
     const vote = String(data.vote || '').toUpperCase().startsWith('HOLD') ? 'HOLD' : 'APPROVE'
     return seat('Claude', 'claude · quick tier', 'model', vote, String(data.reason || 'No reason given').slice(0, 160), Math.round(performance.now() - t0))
@@ -376,11 +384,41 @@ export async function liveAvailable() {
   if (!s) return false
   try { const lim = await s.limits(); return Boolean(lim) } catch { return true }
 }
+// ---- unit economics: every model call a ticket makes is counted; code-only steps cost ₹0 (mirrors backend/app/llm + config.py)
+// The longest price-table key contained in the model name; unknown models use 'default'.
+export function priceFor(model) {
+  const hits = Object.keys(pricing.models).filter((k) => String(model).toLowerCase().includes(k))
+  return hits.length ? pricing.models[hits.sort((a, b) => b.length - a.length)[0]] : pricing.default
+}
+export const costInr = (model, inTok, outTok) => ((inTok * priceFor(model).input + outTok * priceFor(model).output) / 1e6) * pricing.usd_inr
+let meter = null // the ticket being handled (the browser engine runs one ticket at a time)
+function recordCall(agent, label, inChars, outChars, ms) {
+  if (!meter) return
+  const input_tokens = Math.max(1, Math.ceil(inChars / 4)), output_tokens = Math.max(1, Math.ceil(outChars / 4)) // chars / 4: the page's sample API reports no usage
+  meter.calls.push({ agent, provider: 'claude', model: label, input_tokens, output_tokens, estimated: true, cost_inr: Math.round(costInr(label, input_tokens, output_tokens) * 1e6) / 1e6, ms })
+}
+// Wrap the page's sample function so each call is metered, whichever agent makes it.
+function metered(agent, label, sample) {
+  const size = (o) => JSON.stringify(o ?? '', (k, v) => (k === 'execute' ? undefined : v)).length
+  const wrap = async (prompt, opts = {}) => {
+    const t0 = performance.now()
+    const out = await sample(prompt, opts)
+    recordCall(agent, label, String(prompt).length + size(opts.tools), String(out?.text || '').length, Math.round(performance.now() - t0))
+    return out
+  }
+  wrap.json = async (prompt, opts = {}) => {
+    const t0 = performance.now()
+    const out = await sample.json(prompt, opts)
+    recordCall(agent, label, String(prompt).length, size(out), Math.round(performance.now() - t0))
+    return out
+  }
+  return wrap
+}
 const CLAUDE = { triage: 'claude · quick tier', action: 'claude · default tier', responder: 'claude · quick tier', escalation: 'claude · quick tier' }
 async function modelFor(agent) {
   if (!live) return null
   const s = await getSample()
-  return s ? { sample: s, label: CLAUDE[agent] } : null
+  return s ? { sample: metered(agent, CLAUDE[agent], s), label: CLAUDE[agent] } : null
 }
 
 // ====================================================================== agents
@@ -445,9 +483,13 @@ function withRawEntities(tri, rawText) {
 }
 
 async function triage(text) {
-  const rules = rulesTriage(text)
+  const rules = { ...rulesTriage(text), path: 'code' }
   const m = await modelFor('triage')
   if (!m || rules.intent === 'SMALL_TALK') return [rules, 'rules-engine']
+  // Code first: when the rules engine is already confident, the model call is skipped (₹0). Models only handle the unsure cases.
+  if (rules.intent !== 'UNKNOWN' && rules.confidence >= POLICY.code_first_confidence) {
+    return [rules, `rules-engine · code path (${Math.round(rules.confidence * 100)}% ≥ ${Math.round(POLICY.code_first_confidence * 100)}%)`]
+  }
   try {
     const data = await m.sample.json(
       'You are the triage agent of PayMates, an AI support teammate for Indian payment merchants. Classify the merchant message ' +
@@ -463,7 +505,7 @@ async function triage(text) {
     }
     if (ents.amount != null) { const n = parseInt(String(ents.amount).replace(/[₹,]/g, ''), 10); if (Number.isNaN(n)) delete ents.amount; else ents.amount = n }
     return [{ intent, confidence: Math.round(Number(data.confidence ?? 0.7) * 100) / 100, entities: ents,
-      urgency: data.urgency || rules.urgency, language: rules.language, reasoning: String(data.reasoning || '').slice(0, 160) }, m.label]
+      urgency: data.urgency || rules.urgency, language: rules.language, reasoning: String(data.reasoning || '').slice(0, 160), path: 'ai' }, m.label]
   } catch (e) {
     rules.reasoning += ` (Claude unavailable: ${e?.code || e?.message || 'error'})`
     return [rules, `rules-engine (fallback from ${m.label})`]
@@ -974,7 +1016,7 @@ export async function handleMessage(mid, text, emit = async () => {}, { source =
     created = now()
     ticket = { id: ticketId, merchant_id: mid, message: text, lang: 'en', intent: null, confidence: null, status: 'OPEN', outcome: null,
       summary: null, reply: null, created_at: created, resolved_at: null, duration_ms: null, recovered_amount: 0, models: {}, source,
-      subject: watch ? watch.subject : null, facts: {} }
+      subject: watch ? watch.subject : null, facts: {}, ai_cost_inr: 0, llm_calls: [] }
     S.tickets.push(ticket)
   }
   if (watch) {
@@ -985,6 +1027,7 @@ export async function handleMessage(mid, text, emit = async () => {}, { source =
   }
   await emit({ type: 'ticket', ticket: { id: ticketId, merchant_id: mid, created_at: created, message: text, source, resumed: Boolean(resume) } })
   const models = {}
+  meter = { calls: [] } // every model call this ticket makes, with tokens and ₹
   const step = (agent, status, title, extra = {}) => emit({ type: 'step', agent, status, title, ...extra })
   const ms = (t) => Math.max(0, Math.round(performance.now() - t - lastPace))
 
@@ -1001,11 +1044,11 @@ export async function handleMessage(mid, text, emit = async () => {}, { source =
   let t0 = performance.now()
   // A watcher ticket already knows its issue from the record; reply in the merchant's own language.
   const [tri, triModel] = watch
-    ? [{ intent: watch.intent, confidence: 1, entities: watch.entities, urgency: watch.kind === 'soundbox' ? 'medium' : 'high',
+    ? [{ intent: watch.intent, confidence: 1, entities: watch.entities, path: 'code', urgency: watch.kind === 'soundbox' ? 'medium' : 'high',
       language: merchant.lang, reasoning: `Raised by the watcher from ${watch.subject}` }, 'watcher: from records']
     : resume && resume.kind === 'reference'
       // They answered the question we asked: same issue, now with the reference. No need to classify again.
-      ? [{ intent: resume.intent, confidence: 1, entities: { ...resume.entities, ...rawEnts }, urgency: 'high', language: followupLanguage(text, resume.language),
+      ? [{ intent: resume.intent, confidence: 1, entities: { ...resume.entities, ...rawEnts }, urgency: 'high', path: 'code', language: followupLanguage(text, resume.language),
         reasoning: `Continuing the earlier question about ${resume.intent.replace(/_/g, ' ').toLowerCase()}` }, 'memory: pending question']
       : await triage(text)
   if (!watch && !(resume && resume.kind === 'reference')) {
@@ -1067,6 +1110,7 @@ export async function handleMessage(mid, text, emit = async () => {}, { source =
 
   if (run.sessions.length) {
     const last = run.sessions[run.sessions.length - 1]
+    models.council = `3 auditors + ${last.jurors} model juror(s)`
     const held = run.sessions.filter((x) => !x.approved)
     await step('council', held.length ? 'blocked' : 'done',
       `${run.sessions.length} money move(s) reviewed · ${last.votes.length} seats · ${held.length ? 'held for a human' : 'approved'}`,
@@ -1108,7 +1152,10 @@ export async function handleMessage(mid, text, emit = async () => {}, { source =
   const status = { RESOLVED_AI: 'RESOLVED_AI', ESCALATE: 'ESCALATED', NEEDS_INFO: 'NEEDS_INFO' }[a.status]
   Object.assign(ticket, { lang: tri.language, intent: tri.intent, confidence: tri.confidence, status, outcome: a.outcome, summary: a.summary, reply,
     duration_ms: Math.max(0, Math.round(performance.now() - started - paced)), resolved_at: status === 'RESOLVED_AI' ? now() : null,
-    recovered_amount: run.recovered, models, card, facts: Object.fromEntries(Object.entries(a.facts).filter(([, v]) => ['string', 'number'].includes(typeof v))) })
+    recovered_amount: run.recovered, models, card,
+    // AI cost: model calls only. Rules, retrieval, guardrails and templates cost ₹0. A resumed ticket keeps what it already cost.
+    ai_cost_inr: Math.round(((ticket.ai_cost_inr || 0) + meter.calls.reduce((t, c) => t + c.cost_inr, 0)) * 1e6) / 1e6,
+    llm_calls: [...(ticket.llm_calls || []), ...meter.calls], facts: Object.fromEntries(Object.entries(a.facts).filter(([, v]) => ['string', 'number'].includes(typeof v))) })
   audit(ticketId, 'orchestrator', 'close', { status, outcome: a.outcome, duration_ms: ticket.duration_ms })
   if (remember && !watch) {
     if (ASK_REFERENCE.has(a.outcome)) {
@@ -1210,7 +1257,41 @@ export function metrics() {
   const by = {}
   ts.forEach((t) => { const k = t.intent || 'UNKNOWN'; by[k] = by[k] || { total: 0, ai: 0 }; by[k].total++; if (t.status === 'RESOLVED_AI') by[k].ai++ })
   const manual = POLICY.manual_minutes_per_ticket
+
+  // Unit economics: model calls only. Rules, retrieval, guardrails and templates are code and cost ₹0.
+  const costTotal = ts.reduce((t, x) => t + (x.ai_cost_inr || 0), 0)
+  let steps = 0, llmSteps = 0, llmCalls = 0
+  for (const t of ts) {
+    const models = Object.keys(t.models || {}), calls = t.llm_calls || []
+    steps += models.length
+    llmSteps += new Set(calls.map((c) => c.agent).filter((a) => models.includes(a))).size
+    llmCalls += calls.length
+  }
+
+  // Pilot gates: were any autonomous payouts wrong (above the hard limit, or paid twice), and how many unsafe ones were stopped?
+  const paid = new Set()
+  let autonomous = 0, wrong = 0, blocked = 0
+  for (const a of [...S.audit].reverse()) {
+    if (!MONEY_TOOLS.has(a.action)) continue
+    if (!a.detail?.allowed) { blocked++; continue }
+    const args = a.detail.args || {}
+    const key = `${a.action}:${recordKey(args)}`
+    if (a.actor === 'action-agent') {
+      autonomous++
+      // The ₹5,000 cap is for credits and refunds. A payout retry goes to the merchant's own verified account and is not capped.
+      if (a.action !== 'retry_settlement' && amountOf(a.action, args) > LIMIT) wrong++
+    }
+    if (paid.has(key)) wrong++
+    paid.add(key)
+  }
+  const briefed = S.escalations.filter((e) => e.briefing?.summary && e.briefing?.said && e.briefing?.reason).length
   return {
+    ai_cost_total: Math.round(costTotal * 1e6) / 1e6,
+    ai_cost_per_resolved: ai ? Math.round((costTotal / ai) * 1e6) / 1e6 : null,
+    ai_cost_per_ticket: ts.length ? Math.round((costTotal / ts.length) * 1e6) / 1e6 : null,
+    llm_calls: llmCalls, steps_total: steps, llm_steps: llmSteps, code_steps_pct: steps ? Math.round((1 - llmSteps / steps) * 1e4) / 1e4 : null,
+    human_cost_per_ticket: POLICY.human_cost_per_ticket_inr,
+    pilot: { autonomous_payouts: autonomous, wrong_payouts: wrong, blocked_unsafe: blocked, escalations: S.escalations.length, escalations_briefed: briefed },
     total: ts.length, resolved_ai: ai, escalated_open: count('ESCALATED'), resolved_human: count('RESOLVED_HUMAN'), human_followup: count('HUMAN_FOLLOWUP'),
     needs_info: count('NEEDS_INFO'), ai_resolution_rate: ts.length ? Math.round((ai / ts.length) * 1000) / 1000 : 0, median_ai_ms: median,
     manual_minutes_baseline: manual, recovered_value: ts.reduce((s, t) => s + (t.recovered_amount || 0), 0), hours_saved: Math.round((ai * manual / 60) * 10) / 10,
@@ -1332,11 +1413,12 @@ export async function simulate(n, onEvent = () => {}, seedVal = Date.now()) {
 
 // ====================================================================== accuracy evals (mirrors backend/app/evals.py)
 // Uses Claude when live, otherwise the rules triage. The lexicon was tuned on this set: treat the score as an upper bound.
-export async function runEvals() {
+export async function runEvals(rulesOnly = false) {
   const t0 = performance.now()
   const byLang = {}, failures = [], models = {}
   for (const x of evalSet.items) {
-    const [r, model] = await triage(x.text)
+    // rulesOnly: the code path alone (free and instant), used by the pilot-readiness gate on every dashboard load
+    const [r, model] = rulesOnly ? [rulesTriage(x.text), 'rules-engine'] : await triage(x.text)
     models[model] = (models[model] || 0) + 1
     const hit = r.intent === x.intent
     const b = (byLang[x.lang] = byLang[x.lang] || { n: 0, correct: 0 })
@@ -1370,7 +1452,7 @@ export const localEngine = {
     }
   },
   async policy() { return policyView() },
-  evals() { return runEvals() },
+  evals(rulesOnly = false) { return runEvals(rulesOnly) },
   async setPolicy(level, changedBy = 'Ops') { return setPolicy(level, changedBy) },
   setLive(on) { live = Boolean(on) },
   async merchants() { return [...S.merchants.values()].filter((m) => m.id.startsWith('M1')).map(clone) },

@@ -1,6 +1,7 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, STATUS, INTENT_LABEL, StatusChip, fmtMs, fmtTime } from './ui.jsx'
 import { inr } from '../engine/core.js'
+import { fmtAiCost } from './Desk.jsx'
 
 const ORDER = ['RESOLVED_AI', 'ESCALATED', 'RESOLVED_HUMAN', 'NEEDS_INFO']
 const LEGEND = [
@@ -123,10 +124,7 @@ export function lakhCrore(n) {
   return `${sign}${inr(a)}`
 }
 
-function Roi({ liveRate, hasTickets, manualMinutes }) {
-  const [tickets, setTickets] = useState(100000)
-  const [human, setHuman] = useState(50)
-  const [ai, setAi] = useState(2)
+function Roi({ liveRate, hasTickets, manualMinutes, tickets, setTickets, human, setHuman, ai, aiIsLive, setAi, aiMeasuredNote }) {
   const [rate, setRate] = useState(null) // null = follow the live dashboard rate
   const r = rate ?? (hasTickets ? Math.round(liveRate * 100) : 60)
   const resolved = tickets * (r / 100)
@@ -142,8 +140,12 @@ function Roi({ liveRate, hasTickets, manualMinutes }) {
       <div className="panel-body roi-body">
         <div className="roi-inputs">
           <label>Tickets per month<input type="number" min="0" step="1000" value={tickets} onChange={num(setTickets)} /></label>
-          <label>Cost per human-handled ticket (₹)<input type="number" min="0" value={human} onChange={num(setHuman)} /></label>
-          <label>AI cost per ticket (₹)<input type="number" min="0" step="0.5" value={ai} onChange={num(setAi)} /></label>
+          <label>Cost per human-handled ticket (₹)<input type="number" min="0" value={human} onChange={num(setHuman.set)} />
+            <small className="muted">{setHuman.isDefault ? 'Assumption, editable' : <button className="link" onClick={setHuman.reset}>Back to the ₹{setHuman.dflt} assumption</button>}</small>
+          </label>
+          <label>AI cost per ticket (₹)<input type="number" min="0" step="0.01" value={Number(ai.toFixed(4))} onChange={num(setAi)} />
+            <small className="muted">{aiIsLive ? aiMeasuredNote : <button className="link" onClick={() => setAi(null)}>Use the measured cost</button>}</small>
+          </label>
           <label>AI resolution rate (%)
             <input type="number" min="0" max="100" value={r} onChange={(e) => setRate(Math.min(100, Math.max(0, Number(e.target.value) || 0)))} />
             <small className="muted">{rate == null ? (hasTickets ? 'Following the live dashboard rate' : 'No tickets yet, so an example 60%') : <button className="link" onClick={() => setRate(null)}>Use the live rate</button>}</small>
@@ -154,17 +156,98 @@ function Roi({ liveRate, hasTickets, manualMinutes }) {
           <div><small>Yearly savings</small><b className="num">{lakhCrore(monthly * 12)}</b></div>
           <div><small>Specialist hours freed / month</small><b className="num">{Math.round(hours).toLocaleString('en-IN')} h</b></div>
         </div>
-        <p className="muted roi-note">Savings = tickets × resolution rate × human cost − tickets × AI cost. Hours = AI-resolved tickets × {manualMinutes} min. These inputs are illustrative assumptions, <b>not Paytm data</b>.</p>
+        <p className="muted roi-note">Savings = tickets × resolution rate × human cost − tickets × AI cost. Hours = AI-resolved tickets × {manualMinutes} min. The AI cost is measured from this session's model calls at the editable list prices in <span className="mono">shared/pricing.json</span>; the human cost and ticket volume are illustrative assumptions, <b>not Paytm data</b>.</p>
       </div>
     </section>
   )
 }
 
-export function Dashboard({ metrics, tickets, audit, info, onSimulate, simState, onReset }) {
+// Unit economics: what one ticket costs in AI, and how much of the work is plain code (₹0).
+function Economics({ m, human, ai, aiIsLive }) {
+  const none = m.total === 0
+  const times = ai > 0 ? Math.round(human / ai) : null
+  return (
+    <div className="kpis three" aria-label="Unit economics">
+      <section className="panel kpi">
+        <span className="label">AI cost per resolved ticket</span>
+        <span className="val">{fmtAiCost(m.ai_cost_per_resolved)}</span>
+        <span className="muted">{none ? 'No tickets yet' : `${m.llm_calls} model call${m.llm_calls === 1 ? '' : 's'} · ${fmtAiCost(m.ai_cost_total)} in total`}</span>
+        <span className="how">All model calls ÷ tickets resolved without a human. Rules and code steps cost ₹0. Prices are list prices, editable in shared/pricing.json.</span>
+      </section>
+      <section className="panel kpi">
+        <span className="label">Steps handled by code (₹0)</span>
+        <span className="val">{m.code_steps_pct == null ? '–' : Math.round(m.code_steps_pct * 100)}<small>%</small></span>
+        <span className="muted">{m.steps_total ? `${m.steps_total - m.llm_steps} of ${m.steps_total} steps ran as code` : 'No tickets yet'}</span>
+        <span className="how">Rules triage, record lookups, guardrails, council auditors and template replies are code. Only model calls cost money, and the rules engine skips the model when it is 85%+ sure.</span>
+      </section>
+      <section className="panel kpi">
+        <span className="label">AI vs human, per ticket</span>
+        <span className="val vs"><span>{fmtAiCost(ai)}</span><small> vs </small><span>~₹{human}</span></span>
+        <span className="muted">{times ? `About ${times.toLocaleString('en-IN')}× cheaper` : aiIsLive ? 'No model calls in this session (rules engine only)' : 'Set an AI cost to compare'}</span>
+        <span className="how">Human cost is an assumption; AI cost is {aiIsLive ? 'measured from this session' : 'edited in the ROI calculator below'}. Change either there.</span>
+      </section>
+    </div>
+  )
+}
+
+// Pilot readiness: live numbers against the gates a pilot would have to clear.
+const PHASES = 'Phase 1: Suggest only, 500 merchants, 4 weeks → Phase 2: up to ₹1,000 → Phase 3: up to ₹5,000.'
+function Pilot({ m, acc }) {
+  const p = m.pilot || { autonomous_payouts: 0, wrong_payouts: 0, blocked_unsafe: 0, escalations: 0, escalations_briefed: 0 }
+  const rate = Math.round(m.ai_resolution_rate * 100)
+  const gates = [
+    { name: 'Intent accuracy', target: '≥ 90%', value: acc ? `${Math.round(acc.accuracy * 100)}%` : '…', pass: acc ? acc.accuracy >= 0.9 : false,
+      sub: acc ? `${acc.correct} of ${acc.total} labelled messages · rules engine` : 'Running the 45-message test…' },
+    { name: 'Resolved without a human', target: '≥ 70%', value: m.total ? `${rate}%` : '–', pass: m.total >= 10 && rate >= 70,
+      sub: m.total >= 10 ? `${m.resolved_ai} of ${m.total} tickets` : `${m.total}/10 tickets so far. Run the traffic simulator.` },
+    { name: 'Wrong payouts', target: '= 0', value: p.autonomous_payouts + p.blocked_unsafe ? String(p.wrong_payouts) : '–', pass: p.autonomous_payouts + p.blocked_unsafe > 0 && p.wrong_payouts === 0,
+      sub: p.autonomous_payouts + p.blocked_unsafe ? `${p.autonomous_payouts} autonomous payout${p.autonomous_payouts === 1 ? '' : 's'} · ${p.blocked_unsafe} unsafe move${p.blocked_unsafe === 1 ? '' : 's'} blocked` : 'No money has moved yet.' },
+    { name: 'AI cost per resolved ticket', target: '≤ ₹1', value: m.ai_cost_per_resolved == null ? '–' : fmtAiCost(m.ai_cost_per_resolved), pass: m.ai_cost_per_resolved != null && m.ai_cost_per_resolved <= 1,
+      sub: m.ai_cost_per_resolved == null ? 'No resolved tickets yet.' : `${m.llm_calls} model call${m.llm_calls === 1 ? '' : 's'} so far` },
+    { name: 'Escalations with a full briefing', target: '= 100%', value: p.escalations ? `${Math.round((p.escalations_briefed / p.escalations) * 100)}%` : '–', pass: p.escalations > 0 && p.escalations_briefed === p.escalations,
+      sub: p.escalations ? `${p.escalations_briefed} of ${p.escalations} have what was said, the reason and the checks` : 'No escalations yet.' },
+  ]
+  const passing = gates.filter((g) => g.pass).length
+  return (
+    <section className="panel pilot" aria-label="Pilot readiness">
+      <div className="panel-head">
+        <h2>Pilot readiness</h2>
+        <span className={`chip ${passing === gates.length ? 'ok' : 'hold'}`}>{passing} of {gates.length} gates pass</span>
+        <span className="spacer" />
+        <span className="muted" style={{ fontSize: 12.5 }}>Live numbers from this session. A gate with no data yet says NOT YET.</span>
+      </div>
+      <ul className="gates">
+        {gates.map((g) => (
+          <li key={g.name}>
+            <div className="gate-main"><b>{g.name}</b><span className="muted">needs {g.target}</span></div>
+            <div className="gate-val num">{g.value}</div>
+            <span className={`chip ${g.pass ? 'ok' : 'hold'}`}>{g.pass ? 'PASS' : 'NOT YET'}</span>
+            <div className="gate-sub muted">{g.sub}</div>
+          </li>
+        ))}
+      </ul>
+      <p className="phases"><b>Rollout.</b> {PHASES}</p>
+    </section>
+  )
+}
+
+export function Dashboard({ metrics, tickets, audit, info, onSimulate, simState, onReset, onEvals }) {
   const [n, setN] = useState(25)
+  const [acc, setAcc] = useState(null)
+  const [roiTickets, setRoiTickets] = useState(100000)
+  const [humanEdit, setHumanEdit] = useState(null)   // null = the policy's ₹ assumption
+  const [aiEdit, setAiEdit] = useState(null)         // null = the cost measured in this session
   const m = metrics || { total: 0, ai_resolution_rate: 0, series: [], by_intent: {}, recovered_value: 0, hours_saved: 0, manual_minutes_baseline: 18 }
   const lastI = m.series.length ? m.series[m.series.length - 1].i : null
   const routing = info?.routing || {}
+  const hasMetrics = Boolean(metrics)
+  // The pilot's accuracy gate runs the rules engine on the 45 labelled messages: free, instant, repeatable.
+  useEffect(() => { if (hasMetrics && onEvals) onEvals().then(setAcc).catch(() => {}) }, [hasMetrics])  // eslint-disable-line react-hooks/exhaustive-deps
+  const humanDefault = m.human_cost_per_ticket ?? 50
+  const human = humanEdit ?? humanDefault
+  const aiIsLive = aiEdit == null
+  const ai = aiEdit ?? (m.ai_cost_per_ticket ?? 0)
+  const aiMeasuredNote = m.total === 0 ? 'Measured: no tickets yet' : m.llm_calls === 0 ? 'Measured: no model calls (rules engine). Edit to try a model.' : 'Measured from this session'
   return (
     <div>
       <div className="page-head">
@@ -206,6 +289,9 @@ export function Dashboard({ metrics, tickets, audit, info, onSimulate, simState,
           <span className="how">AI-resolved tickets × {m.manual_minutes_baseline} min average handling time</span>
         </section>
       </div>
+
+      <Economics m={m} human={human} ai={ai} aiIsLive={aiIsLive} />
+      <Pilot m={m} acc={acc} />
 
       <div className="grid-2">
         <section className="panel">
@@ -258,7 +344,10 @@ export function Dashboard({ metrics, tickets, audit, info, onSimulate, simState,
         </div>
       </div>
 
-      <Roi liveRate={m.ai_resolution_rate} hasTickets={m.total > 0} manualMinutes={m.manual_minutes_baseline || 18} />
+      <Roi liveRate={m.ai_resolution_rate} hasTickets={m.total > 0} manualMinutes={m.manual_minutes_baseline || 18}
+        tickets={roiTickets} setTickets={setRoiTickets} human={human}
+        setHuman={{ set: setHumanEdit, isDefault: humanEdit == null, reset: () => setHumanEdit(null), dflt: humanDefault }}
+        ai={ai} aiIsLive={aiIsLive} setAi={setAiEdit} aiMeasuredNote={aiMeasuredNote} />
 
       <div className="grid-2">
         <section className="panel">
