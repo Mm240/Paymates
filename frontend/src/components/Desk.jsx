@@ -16,7 +16,7 @@ export const SUGGEST = {
     { text: 'I want to talk to a real person about a customer dispute.' },
   ],
   M1003: [
-    { tag: 'Demo 4', text: 'ग्राहक के पैसे कट गए पर पेमेंट फेल दिखा रहा है' },
+    { tag: 'Demo 4', text: 'ग्राहक के ₹3,400 कट गए पर पेमेंट फेल दिखा रहा है' },
     { text: 'मेरा साउंडबॉक्स भुगतान बोल नहीं रहा' },
     { text: 'कल का सेटलमेंट अभी तक बैंक में नहीं आया' },
     { text: 'Something is off with my account, can you look into it?' },
@@ -127,21 +127,28 @@ function BotBubble({ msg, lang, busy, onCardAction, onCopy, onQuick }) {
   const [open, setOpen] = useState(false)
   const [ack, setAck] = useState(false)
   const role = msg.role === 'human' ? 'human' : 'bot'
-  const collapsible = Boolean(msg.card) && (msg.text || '').length > 90
+  const hasCard = Boolean(msg.card) && msg.card.type !== 'chips'
+  const collapsible = hasCard && (msg.text || '').length > 90
   return (
     <>
-      <div className={`bubble ${role}${msg.card ? ' has-card' : ''}`} lang={isDeva(msg.text) ? 'hi' : undefined}>
-        {msg.card && <ReplyCard card={msg.card} onAction={onCardAction} onCopy={onCopy} />}
+      <div className={`bubble ${role}${hasCard ? ' has-card' : ''}`} lang={isDeva(msg.text) ? 'hi' : undefined}>
+        {msg.card && msg.card.type !== 'chips' && <ReplyCard card={msg.card} onAction={onCardAction} onCopy={onCopy} />}
         <div className={`btext ${collapsible && !open ? 'clamped' : ''}`}>{msg.text}</div>
         {collapsible && <button type="button" className="more" onClick={() => setOpen((o) => !o)} aria-expanded={open}>{lbl(open ? 'read_less' : 'read_more', lang)}</button>}
       </div>
       <div className="quick" role="group" aria-label="Quick replies">
-        {ack
-          ? <span className="quick-ack">✓ {lbl('q_acknowledged', lang)}</span>
-          : [['got_it', 'q_got_it'], ['talk', 'q_talk'], ['summary', 'q_summary']].map(([k, key]) => (
-            <button key={k} type="button" disabled={busy && k !== 'got_it'} lang={lang === 'hi' ? 'hi' : undefined}
-              onClick={() => (k === 'got_it' ? setAck(true) : onQuick(k, lbl(key, lang)))}>{lbl(key, lang)}</button>
-          ))}
+        {msg.card?.quick?.length > 0
+          // This reply asked something: offer the answers, not the generic chips.
+          ? msg.card.quick.map((q) => (
+            <button key={q.label} type="button" disabled={busy && q.send !== undefined} lang={lang === 'hi' ? 'hi' : undefined}
+              onClick={() => (q.send !== undefined ? onQuick('send', q.send) : onCardAction(q.action, msg.card))}>{q.label}</button>
+          ))
+          : ack
+            ? <span className="quick-ack">✓ {lbl('q_acknowledged', lang)}</span>
+            : [['got_it', 'q_got_it'], ['talk', 'q_talk'], ['summary', 'q_summary']].map(([k, key]) => (
+              <button key={k} type="button" disabled={busy && k !== 'got_it'} lang={lang === 'hi' ? 'hi' : undefined}
+                onClick={() => (k === 'got_it' ? setAck(true) : onQuick(k, lbl(key, lang)))}>{lbl(key, lang)}</button>
+            ))}
       </div>
     </>
   )
@@ -170,7 +177,7 @@ export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, b
     const lang = card?.lang || m?.lang || 'en'
     if (action === 'talk_person' || action === 'talk_to_specialist') submit(lbl('a_talk_person', lang))
     else if (action === 'view_details') document.querySelector('[aria-label="Agent trace"]')?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' })
-    else if (action === 'add_txn_id') { setText('Txn ID: '); setTimeout(() => inputRef.current?.focus(), 0) }
+    else if (action === 'add_txn_id') { setText(''); setTimeout(() => inputRef.current?.focus(), 0) }
     else if (action === 'upload_kyc') onToast?.('KYC upload opens in the Paytm for Business app (demo)')
     else if (action === 'track') onToast?.(`Tracking ${card.refs[0] ? `${card.refs[0].label} ${card.refs[0].value}` : card.title}: you'll get an update here`)
     else if (action === 'play_test') {
@@ -189,7 +196,7 @@ export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, b
   }
   const quick = (kind, text) => {
     if (busy) return
-    if (kind === 'talk') submit(text)
+    if (kind === 'talk' || kind === 'send') submit(text)
     else if (kind === 'summary') onSummary?.(text)
   }
   const listen = () => {

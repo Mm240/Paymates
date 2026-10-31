@@ -1,5 +1,6 @@
 // Tests for the in-browser engine (src/engine/local.js), run in Node through Vite: npm test
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { createServer } from 'vite'
 
 const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
@@ -51,10 +52,10 @@ await test('refund amount with attached rs does not select a different refund', 
   assert.equal(t.facts.refund_id, undefined)
 })
 
-await test('accuracy eval: >= 85% overall on 45 messages', async () => {
+await test('accuracy eval: >= 90% overall on 45 messages', async () => {
   const out = await E.runEvals()
   assert.equal(out.total, 45)
-  assert.ok(out.accuracy >= 0.85, JSON.stringify(out.failures))
+  assert.ok(out.accuracy >= 0.9, JSON.stringify(out.failures))
 })
 
 await test('demo 1: failed payment -> PAYMENT_RECOVERED, ₹1,250', async () => {
@@ -108,6 +109,134 @@ await test('cards: specialist follow-up after approving demo 3', async () => {
   const out = await E.decide(esc.id, true, 'Priya (Support)')
   assert.deepEqual([out.followup.card.type, out.followup.card.amount], ['refund_status', '₹7,800'])
 })
+
+// ---- understanding: ask, remember, don't guess (mirrors the pytest cases)
+const C = await vite.ssrLoadModule('/src/engine/core.js')
+const send = (mid, text) => chat(mid, text)
+
+await test('vague payment message asks for the reference and touches nothing', async () => {
+  await fresh()
+  const t = await send('M1001', 'Mera ek payment fail hua')
+  assert.deepEqual([t.status, t.outcome], ['NEEDS_INFO', 'PAYMENT_NOT_FOUND'])
+  assert.match(t.reply, /UTR number \(12 digit\)/)
+  assert.ok(t.card.quick.some((q) => q.action === 'add_txn_id'))
+  const txn = (await E.localEngine.tickets()).length
+  assert.equal(txn, 1)
+})
+
+await test('multi-turn: the transaction ID continues the SAME case and recovers ₹1,250', async () => {
+  await fresh()
+  const first = await send('M1001', 'Mera ek payment fail hua')
+  const second = await send('M1001', 'T88120045')
+  assert.equal(second.id, first.id)
+  assert.equal((await E.localEngine.tickets()).length, 1)
+  assert.deepEqual([second.status, second.outcome, second.recovered_amount, second.lang], ['RESOLVED_AI', 'PAYMENT_RECOVERED', 1250, 'hinglish'])
+})
+
+await test('multi-turn: answered with a 12-digit UTR, or just the amount', async () => {
+  await fresh()
+  await send('M1001', 'Mera ek payment fail hua')
+  assert.equal((await send('M1001', 'UTR 488120045011')).outcome, 'PAYMENT_RECOVERED')
+  await fresh()
+  await send('M1001', 'Mera ek payment fail hua')
+  assert.equal((await send('M1001', '₹1,250')).outcome, 'PAYMENT_RECOVERED')
+})
+
+await test('a UTR inside a message survives PII masking', async () => {
+  await fresh()
+  assert.equal((await send('M1001', 'payment UTR 488120045011 failed')).outcome, 'PAYMENT_RECOVERED')
+})
+
+await test('unknown ID: asks to re-check, no escalation; the corrected ID continues the case', async () => {
+  await fresh()
+  const t = await send('M1001', 'payment T99999999 failed')
+  assert.deepEqual([t.status, t.outcome], ['NEEDS_INFO', 'ID_NOT_FOUND'])
+  assert.match(t.reply, /T99999999/)
+  assert.equal((await E.localEngine.escalations()).length, 0)
+  const again = await send('M1001', 'T88120045')
+  assert.deepEqual([again.id, again.outcome], [t.id, 'PAYMENT_RECOVERED'])
+})
+
+await test("another merchant's ID is not found; 'another payment' and two candidates ask", async () => {
+  await fresh()
+  assert.equal((await send('M1001', 'payment T88230501 failed')).outcome, 'ID_NOT_FOUND')
+  await fresh()
+  assert.equal((await send('M1001', 'another payment failed, money was deducted')).outcome, 'PAYMENT_NOT_FOUND')
+  await fresh()
+  const t = await send('M1003', 'customer ke paise kat gaye payment fail dikha raha')
+  assert.equal(t.outcome, 'PAYMENT_NOT_FOUND')
+  const t2 = await send('M1003', '₹860')
+  assert.deepEqual([t2.id, t2.outcome, t2.recovered_amount], [t.id, 'PAYMENT_RECOVERED', 860])
+})
+
+await test('three unanswered asks hand over to a person', async () => {
+  await fresh()
+  const a = await send('M1001', 'Mera ek payment fail hua')
+  await send('M1001', 'T99999991')
+  const c = await send('M1001', 'T99999992')
+  assert.deepEqual([c.id, c.status, c.outcome], [a.id, 'ESCALATED', 'LOW_CONFIDENCE'])
+})
+
+await test('a succeeded payment is never recovered twice', async () => {
+  await fresh()
+  const t = await send('M1001', 'payment T88120012 failed')
+  assert.equal(t.outcome, 'PAYMENT_ALREADY_OK')
+})
+
+for (const text of ['hi', 'Hello!', 'namaste', 'thanks a lot', 'ok', 'thik hai bhai', 'धन्यवाद']) {
+  await test(`small talk "${text}": friendly reply, quick options, never escalated, not a support ticket`, async () => {
+    await fresh()
+    const t = await send('M1001', text)
+    assert.equal(t.status, 'RESOLVED_AI')
+    assert.ok(t.outcome.startsWith('SMALL_TALK'))
+    assert.equal(t.lang, 'hinglish')
+    assert.equal(t.card.quick.length, 6)
+    assert.equal((await E.localEngine.escalations()).length, 0)
+    assert.equal((await E.localEngine.metrics()).total, 0)
+  })
+}
+
+await test('small talk keeps the open question open', async () => {
+  await fresh()
+  const first = await send('M1001', 'Mera ek payment fail hua')
+  await send('M1001', 'ok')
+  const t = await send('M1001', 'T88120045')
+  assert.deepEqual([t.id, t.outcome], [first.id, 'PAYMENT_RECOVERED'])
+})
+
+await test('ambiguous message: one question with chips, then continues on the same ticket; twice unclear hands over', async () => {
+  await fresh()
+  const t = await send('M1002', 'Something is off with my account, can you look into it?')
+  assert.deepEqual([t.status, t.outcome], ['NEEDS_INFO', 'CLARIFY'])
+  assert.deepEqual(t.card.quick.map((q) => q.send), ['Payment failed', 'Settlement', 'Refund', 'Soundbox', 'KYC', 'Talk to a person'])
+  const t2 = await send('M1002', 'Refund')
+  assert.deepEqual([t2.id, t2.outcome], [t.id, 'REFUND_NEEDS_APPROVAL'])
+  await fresh()
+  const u = await send('M1002', 'Something is off with my account, can you look into it?')
+  const u2 = await send('M1002', 'I dont know, it is just not right')
+  assert.deepEqual([u2.id, u2.status, u2.outcome], [u.id, 'ESCALATED', 'LOW_CONFIDENCE'])
+})
+
+for (const [text, amount] of [['₹1,250 failed', 1250], ['Rs 1250 payment', 1250], ['Rs. 1,250', 1250], ['1250 rupees kata', 1250], ['1250 ka payment fail', 1250],
+  ['1.2k payment failed', 1200], ['5k refund', 5000], ['1250 रुपये कट गए', 1250], ['1000rs refund', 1000], ['2000 refund not done', 2000]]) {
+  await test(`amount format "${text}" -> ${amount}`, () => assert.equal(C.extractEntities(text).amount, amount))
+}
+
+await test('a UTR is not an amount; IDs are extracted', () => {
+  const e = C.extractEntities('UTR 488120045011 ka status, T88120045, R77812, S2610300')
+  assert.equal(e.utr, '488120045011')
+  assert.equal(e.amount, undefined)
+  assert.deepEqual([e.txn_id, e.refund_id, e.settlement_id], ['T88120045', 'R77812', 'S2610300'])
+})
+
+const messy = JSON.parse(readFileSync(new URL('../../shared/messy_tests.json', import.meta.url))).items
+for (const m of messy) {
+  await test(`messy ${m.id}: "${m.text}" -> ${m.intent}`, () => {
+    const r = E.rulesTriage(m.text)
+    assert.equal(r.intent, m.intent)
+    if (!['UNKNOWN', 'SMALL_TALK'].includes(m.intent)) assert.ok(r.confidence >= 0.6, `confidence ${r.confidence}`)
+  })
+}
 
 await vite.close()
 for (const [s, n, m] of results) console.log(`${s === 'ok' ? '  ok  ' : '  FAIL'} ${n}${m ? `\n        ${m}` : ''}`)

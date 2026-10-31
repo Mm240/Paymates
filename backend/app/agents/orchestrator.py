@@ -13,6 +13,7 @@ live. Failures in any model fall back to rules, so a ticket never dies.
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from typing import Awaitable, Callable
 
@@ -20,13 +21,13 @@ from .. import cards
 from ..config import POLICY, pacing_seconds
 from ..guardrails import mask_pii
 from ..store import Store, now_ms
-from ..text import render
+from ..text import detect_language, extract_entities, render, small_talk_kind
 from ..tools import ToolRunner
 from . import action as action_agent
 from .context import gather
 from .escalation import build_briefing
 from .responder import respond
-from .triage import triage as run_triage
+from .triage import triage as run_triage, with_raw_entities
 
 Emit = Callable[[dict], Awaitable[None]]
 
@@ -46,26 +47,54 @@ class Pacer:
             await asyncio.sleep(d)
 
 
+# Outcomes that wait on the merchant. The merchant's next message continues the SAME ticket.
+ASK_REFERENCE = {"PAYMENT_NOT_FOUND", "REFUND_NOT_FOUND", "SETTLEMENT_NOT_FOUND", "ID_NOT_FOUND"}
+ID_KEYS = ("utr", "txn_id", "refund_id", "settlement_id")
+CLARIFY_TURNS = 2        # unclear turns before a human is brought in
+REFERENCE_TURNS = 3      # tries at naming the record before a human is brought in
+
+
+def followup_language(text: str, prior: str) -> str:
+    """An answer that is only an ID or a number carries no language of its own: keep the language the merchant was using."""
+    words = [w for w in text.split() if not re.search(r"\d", w)]
+    return prior if len(words) <= 2 else detect_language(text)
+
+
 async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, source: str = "live",
-                         pacing: float | None = None, watch: dict | None = None) -> dict:
+                         pacing: float | None = None, watch: dict | None = None, remember: bool = True) -> dict:
     merchant = store.merchant(merchant_id)
     if merchant is None:
         raise ValueError(f"unknown merchant {merchant_id}")
     pace = Pacer(pacing_seconds() if pacing is None else pacing)
     started = time.perf_counter()
-    ticket_id = store.next_id("ticket", "PM-")
-    created = now_ms()
-    store.insert("tickets", {"id": ticket_id, "merchant_id": merchant_id, "message": text, "lang": "en", "intent": None,
-                             "confidence": None, "status": "OPEN", "outcome": None, "summary": None, "reply": None,
-                             "created_at": created, "resolved_at": None, "duration_ms": None, "recovered_amount": 0,
-                             "models": {}, "source": source, "subject": watch["subject"] if watch else None, "facts": {}})
+
+    # Conversation memory: is this message the answer to a question PayMates asked?
+    raw_ents = {} if watch else extract_entities(text)
+    pend = store.pending(merchant_id) if (remember and not watch) else None
+    resume = None
+    if pend and not small_talk_kind(text):
+        answers = any(raw_ents.get(k) for k in ID_KEYS) or raw_ents.get("amount") is not None
+        if pend["kind"] == "clarify" or (pend["kind"] == "reference" and answers):
+            resume = pend
+
+    if resume:
+        ticket_id = resume["ticket_id"]
+        created = store.ticket(ticket_id)["created_at"]
+        store.update("tickets", ticket_id, {"status": "OPEN", "outcome": None, "summary": None, "reply": None, "resolved_at": None})
+    else:
+        ticket_id = store.next_id("ticket", "PM-")
+        created = now_ms()
+        store.insert("tickets", {"id": ticket_id, "merchant_id": merchant_id, "message": text, "lang": "en", "intent": None,
+                                 "confidence": None, "status": "OPEN", "outcome": None, "summary": None, "reply": None,
+                                 "created_at": created, "resolved_at": None, "duration_ms": None, "recovered_amount": 0,
+                                 "models": {}, "source": source, "subject": watch["subject"] if watch else None, "facts": {}})
     if watch:
         store.audit(ticket_id, "watcher", "noticed", {"kind": watch["kind"], "subject": watch["subject"], "title": watch["title"]})
     else:
         store.add_message(merchant_id, "merchant", text, ticket_id)
         store.audit(ticket_id, "merchant", "message", {"text": mask_pii(text)})
     await emit({"type": "ticket", "ticket": {"id": ticket_id, "merchant_id": merchant_id, "created_at": created, "message": text,
-                                             "source": source}})
+                                             "source": source, "resumed": bool(resume)}})
     models: dict[str, str] = {}
 
     async def step(agent: str, status: str, title: str, **extra):
@@ -83,6 +112,7 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
 
     # 1. TRIAGE ------------------------------------------------------------
     await step("triage", "running", "Reading the message" if not watch else "Classifying what the watcher found")
+
     t0 = time.perf_counter()
     if watch:
         # The record says what the issue is; no model needed. Reply in the merchant's own language.
@@ -90,10 +120,20 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
                "urgency": "high" if watch["kind"] != "soundbox" else "medium",
                "language": merchant["lang"], "reasoning": f"Raised by the watcher from {watch['subject']}"}
         models["triage"] = "watcher: from records"
+    elif resume and resume["kind"] == "reference":
+        # They answered the question we asked: same issue, now with the reference. No need to classify again.
+        tri = {"intent": resume["intent"], "confidence": 1.0, "entities": {**resume["entities"], **raw_ents}, "urgency": "high",
+               "language": followup_language(text, resume["language"]),
+               "reasoning": f"Continuing the earlier question about {resume['intent'].replace('_', ' ').lower()}"}
+        models["triage"] = "memory: pending question"
     else:
         tri, models["triage"] = await run_triage(mask_pii(text))
+        tri = with_raw_entities(tri, text)          # IDs and amounts come from the raw text; masking hides long numbers
+        if tri["intent"] == "SMALL_TALK":
+            tri["language"] = merchant["lang"]       # "hi" carries no language: greet in the merchant's own
     await pace()
-    await step("triage", "done", f"{tri['intent'].replace('_', ' ').title()} · {int(tri['confidence'] * 100)}% sure",
+    await step("triage", "done", ("Continuing " + ticket_id + " · " if resume and resume["kind"] == "reference" else "")
+               + f"{tri['intent'].replace('_', ' ').title()} · {int(tri['confidence'] * 100)}% sure",
                model=models["triage"], ms=max(0, int((time.perf_counter() - t0 - pace.last) * 1000)), data=tri)
 
     first = merchant["owner"].split()[0]
@@ -118,13 +158,25 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
         models["action"] = "policy: honour human request"
         await step("action", "done", "Merchant asked for a person, so I'm handing over", model=models["action"], ms=0,
                    data={"decision": "handoff"})
+    elif tri["intent"] == "SMALL_TALK":
+        act = action_agent.result("RESOLVED_AI", "SMALL_TALK_THANKS" if tri["entities"].get("small_talk") == "thanks" else "SMALL_TALK_GREET",
+                                  base, "Small talk; answered with quick options")
+        models["action"] = "policy: small talk is never escalated"
+        await step("action", "done", "Just a greeting, so I'm answering and offering options", model=models["action"], ms=0,
+                   data={"decision": "small_talk"})
     elif tri["confidence"] < threshold or tri["intent"] == "UNKNOWN":
-        act = action_agent.result("ESCALATE", "LOW_CONFIDENCE", base,
-                                  f"Triage confidence {int(tri['confidence'] * 100)}% is below the {int(threshold * 100)}% threshold",
-                                  None, f"Not confident enough to act ({int(tri['confidence'] * 100)}%)")
-        models["action"] = "policy: confidence threshold"
-        await step("action", "blocked", "Not sure enough to act, so I'm escalating instead of guessing", model=models["action"], ms=0,
-                   data={"decision": "escalate", "threshold": threshold})
+        if resume and resume["kind"] == "clarify":
+            # Second unclear turn in a row: stop asking and bring in a person.
+            act = action_agent.result("ESCALATE", "LOW_CONFIDENCE", base, f"Still unclear after {CLARIFY_TURNS} turns",
+                                      None, f"Still unclear after {CLARIFY_TURNS} turns")
+            models["action"] = "policy: unclear twice"
+            await step("action", "blocked", "Still not clear after asking, so I'm handing over to a person", model=models["action"], ms=0,
+                       data={"decision": "escalate", "threshold": threshold})
+        else:
+            act = action_agent.result("NEEDS_INFO", "CLARIFY", base, "Message unclear; asked one clarifying question")
+            models["action"] = "policy: ask before guessing"
+            await step("action", "done", "Not sure what this is about, so I'm asking one question instead of guessing", model=models["action"], ms=0,
+                       data={"decision": "clarify", "threshold": threshold})
     else:
         await step("action", "running", "Deciding and acting")
         t0 = time.perf_counter()
@@ -136,6 +188,10 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
                    f"{len(runner.calls)} tool calls · {writes} action(s) taken" + (f" · {held} held for approval" if held else ""),
                    model=models["action"], ms=max(0, int((time.perf_counter() - t0 - pace.last) * 1000)),
                    data={"summary": act["summary"], "outcome": act["outcome"], "fallback": act.get("fallback_note")})
+
+    if act["outcome"] in ASK_REFERENCE and resume and resume["kind"] == "reference" and resume.get("turns", 1) >= REFERENCE_TURNS - 1:
+        act = action_agent.result("ESCALATE", "LOW_CONFIDENCE", base, f"Could not identify the record after {REFERENCE_TURNS} tries", None,
+                                  f"Could not identify the record after {REFERENCE_TURNS} tries")
 
     # 4. MODEL COUNCIL ----------------------------------------------------
     if runner.sessions:
@@ -197,6 +253,16 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
                "resolved_at": now_ms() if status == "RESOLVED_AI" else None, "recovered_amount": runner.recovered,
                "models": models, "card": card, "facts": {k: v for k, v in act["facts"].items() if isinstance(v, (str, int, float))}}
     store.update("tickets", ticket_id, changes)
+    if remember and not watch:
+        if act["outcome"] in ASK_REFERENCE:
+            keep = {k: v for k, v in tri["entities"].items() if k == "amount" or (k in ID_KEYS and act["outcome"] != "ID_NOT_FOUND")}
+            store.set_pending(merchant_id, {"kind": "reference", "intent": tri["intent"], "entities": keep, "language": tri["language"],
+                                            "ticket_id": ticket_id, "turns": (resume["turns"] + 1) if resume and resume["kind"] == "reference" else 1})
+        elif act["outcome"] == "CLARIFY":
+            store.set_pending(merchant_id, {"kind": "clarify", "intent": None, "entities": {}, "language": tri["language"],
+                                            "ticket_id": ticket_id, "turns": 1})
+        elif not act["outcome"].startswith("SMALL_TALK"):
+            store.set_pending(merchant_id, None)       # the case moved on; small talk keeps the open question open
     store.audit(ticket_id, "orchestrator", "close", {"status": status, "outcome": act["outcome"], "duration_ms": duration})
     ticket = store.ticket(ticket_id)
     await emit({"type": "done", "ticket": ticket, "escalation": escalation, "card": card})

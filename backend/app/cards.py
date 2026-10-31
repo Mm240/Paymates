@@ -28,6 +28,12 @@ def _value(src: str, facts: dict, lang: str):
     return label(src[1:], lang) if src.startswith("@") else facts.get(src)
 
 
+def _quick(item: str, lang: str) -> dict:
+    """'send:topic_refund' -> a chip that sends its own label; 'action:add_txn_id' -> a chip that runs a card action."""
+    kind, key = item.split(":", 1)
+    return {"label": label(key if kind == "send" else f"a_{key}", lang), **({"send": label(key, lang)} if kind == "send" else {"action": key})}
+
+
 def build(outcome: str, facts: dict, lang: str, store: Optional[Store] = None, mid: Optional[str] = None,
           extra: Optional[dict] = None) -> dict:
     spec = SPEC["outcomes"].get(outcome) or SPEC["outcomes"]["_default"]
@@ -43,6 +49,7 @@ def build(outcome: str, facts: dict, lang: str, store: Optional[Store] = None, m
         "rows": pairs(spec.get("rows", [])),
         "steps": [{"label": label(k, lang), "state": s} for k, s in spec.get("steps", [])],
         "actions": [{"label": label(f"a_{a}", lang), "action": a} for a in spec.get("actions", [])][:2],
+        "quick": [_quick(q, lang) for q in spec.get("quick", [])],
     }
     if extra.get("escalation_id"):
         card["refs"].append({"label": label("l_case", lang), "value": extra["escalation_id"]})

@@ -34,19 +34,56 @@ export function keywordHits(text, keywords) {
   return found
 }
 
+const CUR = '(?:₹|rs\\.?|inr|rupees?|rupaye|rupay|रुपये|रुपए)'
+const NUM = '(\\d{1,7}(?:,\\d{2,3})*(?:\\.\\d+)?)'
+const DEBITED = /deduct|debit|\bcut\b|\bkat\b|\bkata\b|kat (?:gay|gaye|gya)|money (?:gone|taken)|charged|कट|डेबिट/i
+const OTHER = /\b(?:another|different|some other|other (?:payment|txn|transaction|refund|settlement)|do+sr[ae]|dusr[aei]|koi aur|alag)\b|दूसरा|दूसरे|दूसरी|अलग|कोई और/i
+
+// ₹1,250 · Rs 1250 · 1250 rupees · 1250 ka · 1.2k · 1250 रुपये. 12-digit UTRs and IDs are never amounts.
+export function extractAmount(text) {
+  let m = text.match(new RegExp(`${CUR}\\s?${NUM}\\s?(k)?(?![\\w])`, 'i'))
+    || text.match(new RegExp(`(?<![\\w.])${NUM}\\s?(k)?\\s?(?:${CUR}|ka|ke|ki|का|के|की)(?![\\w])`, 'i'))
+    || text.match(/(?<![\w.])(\d+(?:\.\d+)?)\s?(k)(?![\w])/i)
+  if (!m && /\brefund\b|रिफंड/i.test(text)) m = text.match(/(?<![\w.])(\d{2,7}(?:,\d{2,3})*)(?![\w])/) // "2000 refund not done"
+  if (!m) return null
+  let value = parseFloat(m[1].replace(/,/g, ''))
+  if (Number.isNaN(value)) return null
+  if ((m[2] || '').toLowerCase() === 'k') value *= 1000
+  return Math.round(value)
+}
+
+// Pull IDs and the amount out of the RAW message. Call this before PII masking: the mask hides long numbers like a UTR.
 export function extractEntities(text) {
   const e = {}
   let m
   if ((m = text.match(/\bT\d{6,}\b/i))) e.txn_id = m[0].toUpperCase()
   if ((m = text.match(/\bS\d{6,}\b/i))) e.settlement_id = m[0].toUpperCase()
   if ((m = text.match(/\bR\d{4,}\b/i))) e.refund_id = m[0].toUpperCase()
-  m = text.match(/(?:₹|rs\.?|inr|rupees?)\s?([\d,]+)/i) || text.match(/\b([\d,]{2,})\s?(?:rs\.?|rupees?|rupay|rupaye|रुपये)\b/i)
-  if (!m && /\brefund\b|रिफंड/i.test(text)) m = text.match(/\b([\d,]{2,})\b/)
-  if (m) {
-    const n = parseInt(m[1].replace(/,/g, ''), 10)
-    if (!Number.isNaN(n)) e.amount = n
-  }
+  if ((m = text.match(/(?<![\w.])\d{12}(?![\w])/))) e.utr = m[0]
+  const amount = extractAmount(text)
+  if (amount !== null) e.amount = amount
+  if (OTHER.test(text)) e.other = true
+  if (DEBITED.test(text)) e.debited = true // the merchant says the customer's money was taken
   return e
+}
+
+// ---------------------------------------------------------------- small talk
+const GREET = new Set(['hi', 'hii', 'hiii', 'hello', 'hey', 'heyy', 'hlo', 'helo', 'namaste', 'namaskar', 'hola', 'good morning', 'good afternoon',
+  'good evening', 'gm', 'नमस्ते', 'नमस्कार', 'हेलो', 'हैलो', 'हाय'])
+const THANKS = new Set(['thanks', 'thank you', 'thankyou', 'thx', 'ty', 'ok', 'okay', 'okk', 'k', 'kk', 'thik hai', 'theek hai', 'thik', 'theek', 'shukriya',
+  'dhanyavad', 'dhanyawad', 'got it', 'fine', 'cool', 'great', 'accha', 'achha', 'acha', 'bye', 'धन्यवाद', 'शुक्रिया', 'ठीक है', 'ठीक',
+  'अच्छा', 'बढ़िया', 'थैंक्यू', 'थैंक यू'])
+const FILLER = new Set(['a', 'lot', 'so', 'much', 'very', 'bhai', 'ji', 'sir', 'madam', 'didi', 'boss', 'team', 'paymates', 'there', 'again', 'bahut', 'जी', 'भाई', 'बहुत'])
+
+// 'greet' | 'thanks' for a message that is only a greeting or an acknowledgement, else null.
+export function smallTalkKind(text) {
+  const t = text.toLowerCase().replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}!?.,;:"'()[\]{}<>|/\\~*_-]+/gu, ' ')
+  if (!t.trim()) return /[\u{1F44D}\u{1F64F}]/u.test(text) ? 'thanks' : null
+  const words = t.split(/\s+/).filter((w) => w && !FILLER.has(w))
+  const joined = words.join(' ')
+  if (GREET.has(joined) || (words.length && words.every((w) => GREET.has(w)))) return 'greet'
+  if (THANKS.has(joined) || (words.length && words.every((w) => THANKS.has(w) || GREET.has(w)) && words.some((w) => THANKS.has(w)))) return 'thanks'
+  return null
 }
 
 export function inr(n) {

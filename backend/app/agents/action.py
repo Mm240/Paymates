@@ -19,7 +19,7 @@ from ..config import LEXICON, POLICY, TEMPLATES, model_for
 from ..llm import chat, parse_json
 from ..rag import index
 from ..store import Store
-from ..text import ago, inr, phrase, tokens
+from ..text import ago, inr, phrase, small_talk_kind, tokens
 from ..tools import ToolRunner, tool_specs
 
 LIMIT = POLICY["auto_money_limit"]
@@ -43,26 +43,38 @@ def reason_text(code: Optional[str], lang: str) -> str:
 
 
 # ====================================================================== playbooks
+def ask(outcome: str, base: dict, why: str, **facts) -> dict:
+    """Not enough to go on: ask the merchant for the reference instead of acting on a guess."""
+    return result("NEEDS_INFO", outcome, {**base, **facts}, why)
+
+
 async def pb_failed_payment(run: ToolRunner, store: Store, tri: dict, base: dict) -> dict:
     ents, lang = tri["entities"], tri["language"]
-    txn = None
-    if ents.get("txn_id"):
-        r = await run.run("get_transaction", {"txn_id": ents["txn_id"]})
-        if not r.get("blocked") and not r.get("error"):
-            txn = r
-    if txn is None:
-        r = await run.run("list_transactions", {"status": "FAILED"})
-        cands = r.get("transactions", [])
-        if ents.get("amount"):
-            cands = [t for t in cands if t["amount"] == ents["amount"]] or cands
-        cands.sort(key=lambda t: (not t["customer_debited"], t["recovered"], t["minutes_ago"]))
-        txn = cands[0] if cands else None
-    if txn is None:
-        return result("NEEDS_INFO", "PAYMENT_NOT_FOUND", base, "No matching failed payment found; asked merchant for details")
+    ref = ents.get("utr") or ents.get("txn_id")
+    if ref:
+        r = await run.run("find_transaction", {"utr": ents["utr"]} if ents.get("utr") else {"txn_id": ents["txn_id"]})
+        if "txn_id" not in r:
+            return ask("ID_NOT_FOUND", base, f"{ref} is not on this merchant's account; asked them to re-check it", ref=ref)
+        txn = r
+    else:
+        r = await run.run("list_transactions", {"status": "FAILED", "limit": 20})
+        cands = [t for t in r.get("transactions", []) if not t["recovered"]]
+        if ents.get("amount") is not None:
+            cands = [t for t in cands if t["amount"] == ents["amount"]]
+        debited = [t for t in cands if t["customer_debited"]]
+        if not cands:
+            return ask("PAYMENT_NOT_FOUND", base, "No failed payment matches what the merchant said; asked for the UTR or transaction ID")
+        # With no ID or amount, act only if the merchant says money was taken AND exactly one payment fits.
+        # A bare "a payment failed" is not enough to move money.
+        if ents.get("amount") is None and (ents.get("other") or not ents.get("debited") or len(debited) > 1 or (not debited and len(cands) > 1)):
+            return ask("PAYMENT_NOT_FOUND", base, "Not enough to pick one payment safely; asked for the UTR or transaction ID")
+        txn = sorted(debited or cands, key=lambda t: t["minutes_ago"])[0]
 
     facts = {**base, "txn_id": txn["txn_id"], "amount": inr(txn["amount"]), "amount_raw": txn["amount"]}
     if txn.get("recovered"):
         return result("RESOLVED_AI", "PAYMENT_RECOVERED", facts, f"{txn['txn_id']} was already recovered")
+    if txn["gateway_status"] == "SUCCESS":
+        return result("RESOLVED_AI", "PAYMENT_ALREADY_OK", facts, f"{txn['txn_id']} succeeded normally; nothing to recover")
     if not txn["customer_debited"]:
         return result("RESOLVED_AI", "PAYMENT_NOT_DEBITED", facts, f"{txn['txn_id']} failed before debit; no money moved")
 
@@ -82,12 +94,23 @@ async def pb_failed_payment(run: ToolRunner, store: Store, tri: dict, base: dict
 
 async def pb_settlement(run: ToolRunner, store: Store, tri: dict, base: dict) -> dict:
     lang = tri["language"]
-    r = await run.run("list_settlements", {})
+    ents = tri["entities"]
+    r = await run.run("list_settlements", {"limit": 20})
     ss = r.get("settlements", [])
-    sid = tri["entities"].get("settlement_id")
-    target = next((s for s in ss if s["settlement_id"] == sid), None) if sid else None
-    target = target or next((s for s in ss if s["status"] == "ON_HOLD"), None) \
-        or next((s for s in ss if s["status"] == "PROCESSING"), None) or (ss[0] if ss else None)
+    sid, utr = ents.get("settlement_id"), ents.get("utr")
+    if sid or utr:
+        target = next((s for s in ss if s["settlement_id"] == sid or (utr and s["utr"] == utr)), None)
+        if target is None:
+            return ask("ID_NOT_FOUND", base, f"{sid or utr} is not a settlement on this account; asked them to re-check it", ref=sid or utr)
+    elif ents.get("amount") is not None:
+        target = next((s for s in ss if s["amount"] == ents["amount"]), None)
+        if target is None:
+            return ask("SETTLEMENT_NOT_FOUND", base, f"No settlement of {inr(ents['amount'])}; asked for the UTR or transaction ID")
+    elif ents.get("other") and ss:
+        return ask("SETTLEMENT_NOT_FOUND", base, "Merchant means a different settlement; asked which one")
+    else:
+        target = next((s for s in ss if s["status"] == "ON_HOLD"), None) \
+            or next((s for s in ss if s["status"] == "PROCESSING"), None) or (ss[0] if ss else None)
     if target is None:
         doc = index.search("settlement timeline", 1)[0]
         return result("RESOLVED_AI", "FAQ_ANSWER", {**base, "answer": doc["short"][lang]}, "No settlements yet; explained timelines")
@@ -130,18 +153,27 @@ async def pb_refund(run: ToolRunner, store: Store, tri: dict, base: dict) -> dic
     rf = None
     if ents.get("refund_id"):
         r = await run.run("get_refund", {"refund_id": ents["refund_id"]})
-        if not r.get("blocked") and not r.get("error"):
-            rf = r
-    if rf is None:
-        r = await run.run("list_refunds", {})
+        if r.get("blocked") or r.get("error"):
+            return ask("ID_NOT_FOUND", base, f"{ents['refund_id']} is not a refund on this account; asked them to re-check it", ref=ents["refund_id"])
+        rf = r
+    else:
+        r = await run.run("list_refunds", {"limit": 20})
         cands = r.get("refunds", [])
-        if ents.get("amount") is not None:
+        ref = ents.get("utr") or ents.get("txn_id")
+        if ref:
+            t = await run.run("find_transaction", {"utr": ents["utr"]} if ents.get("utr") else {"txn_id": ents["txn_id"]})
+            if "txn_id" not in t:
+                return ask("ID_NOT_FOUND", base, f"{ref} is not on this merchant's account; asked them to re-check it", ref=ref)
+            cands = [x for x in cands if x["txn_id"] == t["txn_id"]]
+        elif ents.get("amount") is not None:
             cands = [x for x in cands if x["amount"] == ents["amount"]]
+        if not cands or (not ref and ents.get("amount") is None and ents.get("other")):
+            return ask("REFUND_NOT_FOUND", base, "No refund matches what the merchant said; asked for the refund ID, UTR or transaction ID")
+        failed = [x for x in cands if x["status"] == "FAILED"]
+        if len(failed) != 1 and len(cands) > 1 and ents.get("amount") is None and not ref:
+            return ask("REFUND_NOT_FOUND", base, f"{len(failed) or len(cands)} refunds could match; asked which one")
         order = {"FAILED": 0, "PROCESSING": 1, "PROCESSED": 2}
-        cands.sort(key=lambda x: order.get(x["status"], 3))
-        rf = cands[0] if cands else None
-    if rf is None:
-        return result("NEEDS_INFO", "REFUND_NOT_FOUND", base, "No matching refund found; asked for details")
+        rf = sorted(cands, key=lambda x: order.get(x["status"], 3))[0]
 
     row = store.refund(rf["refund_id"])
     facts = {**base, "refund_id": row["id"], "amount": inr(row["amount"]), "amount_raw": row["amount"]}
@@ -225,6 +257,11 @@ async def pb_soundbox(run: ToolRunner, store: Store, tri: dict, base: dict, text
     return result("RESOLVED_AI", "SOUNDBOX_OK", facts, f"{d['device_id']} healthy; gave next steps")
 
 
+def pb_small_talk(tri: dict, base: dict, text: str) -> dict:
+    kind = small_talk_kind(text) or tri["entities"].get("small_talk") or "greet"
+    return result("RESOLVED_AI", "SMALL_TALK_THANKS" if kind == "thanks" else "SMALL_TALK_GREET", base, "Small talk; answered with quick options")
+
+
 async def pb_kyc(run: ToolRunner, store: Store, tri: dict, base: dict) -> dict:
     lang = tri["language"]
     k = await run.run("get_kyc_status", {})
@@ -258,16 +295,21 @@ async def run_playbook(run: ToolRunner, store: Store, tri: dict, base: dict, tex
         return await pb_soundbox(run, store, tri, base, text)
     if intent == "KYC":
         return await pb_kyc(run, store, tri, base)
+    if intent == "SMALL_TALK":
+        return pb_small_talk(tri, base, text)
     return await pb_general(run, store, tri, base, text)
 
 
 # ====================================================================== LLM strategy
 PLAYBOOK_HINTS = {
-    "FAILED_PAYMENT": "Find the failed payment (by ID, else amount, else most recent where the customer was debited). If debited, "
-                      "call recheck_payment_status. If the bank says SUCCESS, call mark_payment_recovered. If FAILED, explain auto-reversal.",
+    "FAILED_PAYMENT": "Find the payment with find_transaction (UTR or transaction ID) if given, else list_transactions(FAILED) and filter by amount. "
+                      "If no ID is given and more than one payment could match, or the ID is not found, do NOT pick one: finish with outcome needs_info. "
+                      "If the payment already succeeded, there is nothing to recover. If debited, call recheck_payment_status. If the bank says SUCCESS, "
+                      "call mark_payment_recovered. If FAILED, explain auto-reversal.",
     "SETTLEMENT_DELAY": "list_settlements. If ON_HOLD with BANK_TIMEOUT, call retry_settlement then raise_ticket (category settlements, P2). "
                         "If KYC_PENDING, call get_kyc_status and raise_ticket (category kyc). If SETTLED, give the UTR.",
-    "REFUND_ISSUE": "Find the refund. PROCESSED -> give ARN. PROCESSING -> give ETA. FAILED -> call reinitiate_refund (held for approval if above limit).",
+    "REFUND_ISSUE": "Find the refund by ID or amount. If several could match and none is clearly the failed one, or the ID is not found, do NOT pick one: "
+                    "finish with outcome needs_info. PROCESSED -> give ARN. PROCESSING -> give ETA. FAILED -> call reinitiate_refund (held for approval if above limit).",
     "SOUNDBOX": "run_soundbox_diagnostics. Weak signal or offline -> reconnect_device. Missed announcements -> resend_missed_announcements, "
                 "then play_test_announcement. Volume 0 cannot be changed remotely: tell the merchant to press + 3 times. "
                 "Language change -> set_announcement_language. Hardware fault or offline for hours -> raise_ticket (devices) for a replacement.",
@@ -331,7 +373,8 @@ async def run_llm(spec, run: ToolRunner, store: Store, tri: dict, ctx: dict, tex
     if final.get("outcome") == "escalate":
         return result("ESCALATE", "LOW_CONFIDENCE", base, summary, None, summary)
     if final.get("outcome") == "needs_info":
-        return result("NEEDS_INFO", "GENERIC_RESOLVED", {**base, "summary": summary}, summary)
+        ask_outcome = {"FAILED_PAYMENT": "PAYMENT_NOT_FOUND", "REFUND_ISSUE": "REFUND_NOT_FOUND", "SETTLEMENT_DELAY": "SETTLEMENT_NOT_FOUND"}.get(tri["intent"])
+        return result("NEEDS_INFO", ask_outcome or "GENERIC_RESOLVED", {**base, "summary": summary}, summary)
     return result("RESOLVED_AI", "GENERIC_RESOLVED", {**base, "summary": summary}, summary)
 
 

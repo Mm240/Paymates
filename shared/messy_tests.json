@@ -1,0 +1,155 @@
+{
+ "_note": "25 messy single messages (typos, mixed language) used by pytest and npm test. Written before the lexicon was extended for them.",
+ "items": [
+  {
+   "id": "M01",
+   "lang": "en",
+   "text": "paymnt failed but cust account debited",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "M02",
+   "lang": "en",
+   "text": "my pymt got stuck money cut from customer",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "M03",
+   "lang": "en",
+   "text": "refnd not recieved by customer yet",
+   "intent": "REFUND_ISSUE"
+  },
+  {
+   "id": "M04",
+   "lang": "en",
+   "text": "setelment not credited yet pls check",
+   "intent": "SETTLEMENT_DELAY"
+  },
+  {
+   "id": "M05",
+   "lang": "en",
+   "text": "soundbox band ho gaya, no sound",
+   "intent": "SOUNDBOX"
+  },
+  {
+   "id": "M06",
+   "lang": "en",
+   "text": "need to complete kyc what docs",
+   "intent": "KYC"
+  },
+  {
+   "id": "M07",
+   "lang": "en",
+   "text": "amount deduct from customer but shows unsuccessful",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "M08",
+   "lang": "en",
+   "text": "can i speak to someone from paytm",
+   "intent": "HUMAN_REQUEST"
+  },
+  {
+   "id": "M09",
+   "lang": "en",
+   "text": "thanks a lot",
+   "intent": "SMALL_TALK"
+  },
+  {
+   "id": "M10",
+   "lang": "en",
+   "text": "good morning",
+   "intent": "SMALL_TALK"
+  },
+  {
+   "id": "M11",
+   "lang": "en",
+   "text": "asdkjh qwe",
+   "intent": "UNKNOWN"
+  },
+  {
+   "id": "M12",
+   "lang": "en",
+   "text": "customer paid 450 but pymt declined, amt cut",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "M13",
+   "lang": "hi",
+   "text": "ग्राहक के पैसे कट गए पर ट्रांजैक्शन फेल",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "M14",
+   "lang": "hi",
+   "text": "सेटलमेंट अभी तक नहीं आया बैंक में",
+   "intent": "SETTLEMENT_DELAY"
+  },
+  {
+   "id": "M15",
+   "lang": "hi",
+   "text": "रिफंड नहीं पहुंचा ग्राहक के पास",
+   "intent": "REFUND_ISSUE"
+  },
+  {
+   "id": "M16",
+   "lang": "hi",
+   "text": "साउंडबॉक्स की आवाज़ बंद है",
+   "intent": "SOUNDBOX"
+  },
+  {
+   "id": "M17",
+   "lang": "hi",
+   "text": "केवाईसी में कौन सा कागज़ लगेगा",
+   "intent": "KYC"
+  },
+  {
+   "id": "M18",
+   "lang": "hi",
+   "text": "धन्यवाद",
+   "intent": "SMALL_TALK"
+  },
+  {
+   "id": "M19",
+   "lang": "hinglish",
+   "text": "paise kat gaye par payment fail dikha raha hai",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "M20",
+   "lang": "hinglish",
+   "text": "paisa nahi aaya abhi tak bank mein",
+   "intent": "SETTLEMENT_DELAY"
+  },
+  {
+   "id": "M21",
+   "lang": "hinglish",
+   "text": "refund wapas nahi mila customer ko",
+   "intent": "REFUND_ISSUE"
+  },
+  {
+   "id": "M22",
+   "lang": "hinglish",
+   "text": "awaz nahi aa rahi soundbox se",
+   "intent": "SOUNDBOX"
+  },
+  {
+   "id": "M23",
+   "lang": "hinglish",
+   "text": "kyc ka kya status hai",
+   "intent": "KYC"
+  },
+  {
+   "id": "M24",
+   "lang": "hinglish",
+   "text": "mujhe kisi se baat karni hai abhi",
+   "intent": "HUMAN_REQUEST"
+  },
+  {
+   "id": "M25",
+   "lang": "hinglish",
+   "text": "thik hai bhai",
+   "intent": "SMALL_TALK"
+  }
+ ]
+}

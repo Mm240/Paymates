@@ -27,7 +27,7 @@ CREATE TABLE merchants (
 CREATE TABLE transactions (
   id TEXT PRIMARY KEY, merchant_id TEXT, amount INTEGER, method TEXT, payer TEXT, created_at INTEGER,
   gateway_status TEXT, bank_debited INTEGER, bank_status TEXT, bank_checked INTEGER DEFAULT 0,
-  recovered INTEGER DEFAULT 0
+  recovered INTEGER DEFAULT 0, utr TEXT
 );
 CREATE TABLE settlements (
   id TEXT PRIMARY KEY, merchant_id TEXT, amount INTEGER, status TEXT, hold_reason TEXT,
@@ -100,7 +100,7 @@ class Store:
             self.insert("transactions", {
                 "id": t["id"], "merchant_id": t["merchant_id"], "amount": t["amount"], "method": t["method"],
                 "payer": t["payer"], "created_at": at(t["at_min"]), "gateway_status": t["gateway_status"],
-                "bank_debited": t["bank_debited"], "bank_status": t["bank_status"],
+                "bank_debited": t["bank_debited"], "bank_status": t["bank_status"], "utr": t.get("utr"),
             })
         for s in SEED["settlements"]:
             self.insert("settlements", {
@@ -175,6 +175,9 @@ class Store:
     def transaction(self, tid: str) -> Optional[dict]:
         return self.one("SELECT * FROM transactions WHERE id = ?", (tid,))
 
+    def transaction_by_utr(self, mid: str, utr: str) -> Optional[dict]:
+        return self.one("SELECT * FROM transactions WHERE utr = ? AND merchant_id = ?", (utr, mid))
+
     def transactions(self, mid: str, status: Optional[str] = None, limit: int = 10) -> list[dict]:
         if status:
             return self.all("SELECT * FROM transactions WHERE merchant_id = ? AND gateway_status = ? "
@@ -221,6 +224,16 @@ class Store:
     # ------------------------------------------------------------------ domain writes
     def add_message(self, mid: str, role: str, text: str, ticket_id: Optional[str]) -> None:
         self.insert("messages", {"merchant_id": mid, "role": role, "text": text, "ts": now_ms(), "ticket_id": ticket_id})
+
+    # ------------------------------------------------------------------ conversation memory
+    def pending(self, mid: str, max_age_ms: int = 30 * 60_000) -> Optional[dict]:
+        """The question PayMates is waiting on for this merchant (an ID, or which topic), if still fresh."""
+        raw = self.setting(f"pending:{mid}")
+        p = json.loads(raw) if raw else None
+        return p if p and now_ms() - p.get("ts", 0) <= max_age_ms else None
+
+    def set_pending(self, mid: str, pending: Optional[dict]) -> None:
+        self.set_setting(f"pending:{mid}", json.dumps({**pending, "ts": now_ms()}, ensure_ascii=False) if pending else "")
 
     def setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
         with self.lock:

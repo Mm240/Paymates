@@ -1,5 +1,5 @@
 {
- "_note": "Accuracy test set for triage: 45 realistic merchant messages (15 English, 15 Hindi, 15 Hinglish) with expected intents. Labels are ground truth; improve the lexicon, never the labels.",
+ "_note": "Accuracy test set for triage: 45 realistic merchant messages (15 English, 15 Hindi, 15 Hinglish) with expected intents. Labels are ground truth; improve the lexicon, never the labels. E15, E30 and E45 (hello, नमस्ते, hii) were relabelled UNKNOWN -> SMALL_TALK when greetings became their own intent.",
  "items": [
   {
    "id": "E01",
@@ -89,7 +89,7 @@
    "id": "E15",
    "lang": "en",
    "text": "hello",
-   "intent": "UNKNOWN"
+   "intent": "SMALL_TALK"
   },
   {
    "id": "E16",
@@ -179,7 +179,7 @@
    "id": "E30",
    "lang": "hi",
    "text": "नमस्ते",
-   "intent": "UNKNOWN"
+   "intent": "SMALL_TALK"
   },
   {
    "id": "E31",
@@ -269,7 +269,7 @@
    "id": "E45",
    "lang": "hinglish",
    "text": "hii",
-   "intent": "UNKNOWN"
+   "intent": "SMALL_TALK"
   }
  ]
 }

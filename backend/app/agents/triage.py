@@ -12,7 +12,7 @@ import json
 from ..config import LEXICON, model_for
 from ..llm import chat, parse_json
 from ..rag import index
-from ..text import detect_language, extract_entities, keyword_hits
+from ..text import detect_language, extract_entities, keyword_hits, small_talk_kind
 
 INTENTS = {
     "FAILED_PAYMENT": "A customer's payment failed, is stuck, or money was deducted without success.",
@@ -22,12 +22,16 @@ INTENTS = {
     "KYC": "KYC status, verification or which documents are needed.",
     "HUMAN_REQUEST": "The merchant explicitly asks for a human, a call, or a manager.",
     "GENERAL": "A how-to or policy question answerable from the help center.",
+    "SMALL_TALK": "Only a greeting, thanks or acknowledgement (hi, hello, namaste, thanks, ok, thik hai).",
     "UNKNOWN": "Unclear or out of scope.",
 }
 MONEY = {"FAILED_PAYMENT", "SETTLEMENT_DELAY", "REFUND_ISSUE"}
 
 
 def rules_triage(text: str) -> dict:
+    if kind := small_talk_kind(text):
+        return {"intent": "SMALL_TALK", "confidence": 0.95, "entities": {"small_talk": kind}, "urgency": "low",
+                "language": detect_language(text), "reasoning": f"Only a {'greeting' if kind == 'greet' else 'thanks or acknowledgement'}"}
     weights = LEXICON.get("intent_weights", {})
     scores, hits = {}, {}
     for intent, kws in LEXICON["intents"].items():
@@ -83,11 +87,24 @@ SYSTEM = (
 )
 
 
+def with_raw_entities(tri: dict, raw_text: str) -> dict:
+    """Merge IDs and amounts read from the RAW message into a triage result.
+
+    Triage runs on PII-masked text, which hides long numbers such as a 12-digit UTR, so entities are
+    always extracted from the original text. A UTR on its own means a payment question.
+    """
+    ents = extract_entities(raw_text)
+    out = {**tri, "entities": {**tri["entities"], **ents}}
+    if ents.get("utr") and out["intent"] in ("UNKNOWN", "GENERAL"):
+        out.update(intent="FAILED_PAYMENT", confidence=max(out["confidence"], 0.8), reasoning="A UTR number means a payment question")
+    return out
+
+
 async def triage(text: str) -> tuple[dict, str]:
     """Returns (result, model_label)."""
     rules = rules_triage(text)
     spec = model_for("triage")
-    if not spec:
+    if not spec or rules["intent"] == "SMALL_TALK":
         return rules, "rules-engine"
     try:
         out = await chat(spec, [{"role": "system", "content": SYSTEM}, {"role": "user", "content": text}],

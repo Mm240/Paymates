@@ -21,11 +21,16 @@ def grounded(draft: str, candidate: str) -> bool:
     return all(token in candidate for token in set(CRITICAL.findall(draft)))
 
 
+# Fixed wording: asking for an ID, small talk and clarifying questions are sent exactly as written.
+STATIC_REPLIES = {"FAQ_ANSWER", "PAYMENT_NOT_FOUND", "REFUND_NOT_FOUND", "SETTLEMENT_NOT_FOUND", "ID_NOT_FOUND", "SMALL_TALK_GREET",
+                  "SMALL_TALK_THANKS", "CLARIFY"}
+
+
 async def respond(outcome: str, facts: dict, lang: str, text: str) -> tuple[str, str, bool]:
     """Returns (reply, model_label, grounded_ok)."""
     draft = render(outcome, lang, facts)
     spec = model_for("responder")
-    if not spec or outcome in ("FAQ_ANSWER",):
+    if not spec or outcome in STATIC_REPLIES:
         return draft, "templates", True
     try:
         out = await chat(spec, [

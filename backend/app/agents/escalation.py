@@ -23,6 +23,8 @@ def describe_call(c: dict) -> str:
         return f"Held: {n} {json.dumps(a)} — {g['reason']}"
     if n == "get_transaction" and "txn_id" in r:
         return f"Payment {r['txn_id']} · {r['amount_display']} · gateway {r['gateway_status']} · customer {'debited' if r['customer_debited'] else 'not debited'}"
+    if n == "find_transaction":
+        return f"Looked up payment {a.get('utr') or a.get('txn_id')}: " + (f"{r['txn_id']} · {r['amount_display']}" if "txn_id" in r else "not found")
     if n == "list_transactions":
         return f"Looked up {len(r.get('transactions', []))} recent payment(s)"
     if n == "recheck_payment_status":

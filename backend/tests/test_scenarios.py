@@ -98,7 +98,9 @@ def test_human_request_and_low_confidence(store):
     t, _ = run(store, "M1002", "I want to talk to a real person about a customer dispute.")
     assert t["status"] == "ESCALATED" and t["outcome"] == "HUMAN_HANDOFF"
     t2, _ = run(store, "M1002", "Something is off with my account, can you look into it?")
-    assert t2["status"] == "ESCALATED" and t2["outcome"] == "LOW_CONFIDENCE"
+    assert t2["status"] == "NEEDS_INFO" and t2["outcome"] == "CLARIFY"           # one question first, not an escalation
+    t3, _ = run(store, "M1002", "I dont know, it is just not right")
+    assert t3["id"] == t2["id"] and t3["status"] == "ESCALATED" and t3["outcome"] == "LOW_CONFIDENCE"   # second unclear turn: a person
 
 
 def test_faq_answer(store):
@@ -203,7 +205,7 @@ def test_council_model_jurors_vote_and_abstain(store, monkeypatch):
 
 
 def test_demo_4_council_vetoes_kyc_pending_credit(store):
-    t, ev = run(store, "M1003", "ग्राहक के पैसे कट गए पर पेमेंट फेल दिखा रहा है")
+    t, ev = run(store, "M1003", "ग्राहक के ₹3,400 कट गए पर पेमेंट फेल दिखा रहा है")
     assert t["lang"] == "hi"
     assert t["status"] == "ESCALATED" and t["outcome"] == "COUNCIL_HOLD"
     assert "₹5,000" not in t["reply"]                                     # it was within the limit; don't claim otherwise
@@ -385,7 +387,7 @@ def test_rules_triage_accuracy_at_least_85_percent():
     from app.evals import run_evals
     out = asyncio.run(run_evals())
     assert out["models"] == {"rules-engine": 45}          # offline in tests: the rules engine answered every one
-    assert out["accuracy"] >= 0.85, out["failures"]
+    assert out["accuracy"] >= 0.90, out["failures"]
     assert all(b["accuracy"] >= 0.8 for b in out["by_language"].values())
 
 
@@ -408,7 +410,7 @@ def test_dissimilar_amount_is_not_recalled(store):
     asyncio.run(ops.decide(store, store.escalations()[0]["id"], False, "Priya (Support)", "Customer used a closed card"))
     store.insert("refunds", {"id": "R77900", "merchant_id": "M1002", "txn_id": None, "amount": 25000, "status": "FAILED",
                              "reason": "BANK_REJECTED_TECHNICAL", "initiated_at": now_ms(), "arn": None, "eta_at": None})
-    run(store, "M1002", "Customer says refund not received.")                # ₹25,000 is not within 50% of ₹7,800
+    run(store, "M1002", "Customer says refund of ₹25,000 not received.")      # ₹25,000 is not within 50% of ₹7,800
     nxt = next(e for e in store.escalations() if e["status"] == "OPEN")
     assert nxt["briefing"]["similar"] is None
 
@@ -551,3 +553,151 @@ def test_model_failing_after_acting_keeps_the_real_outcome(store, monkeypatch):
     t, ev = run(store, "M1001", "Customer's payment failed but money was deducted.")
     assert t["outcome"] == "PAYMENT_RECOVERED" and t["recovered_amount"] == 1250
     assert "list_transactions" not in tools_called(ev)
+
+
+# ---------------------------------------------------------------- understanding: ask, remember, don't guess
+def send(store, mid, text):
+    t, ev = run(store, mid, text)
+    return t, ev
+
+
+def test_vague_payment_message_asks_for_the_reference(store):
+    t, ev = send(store, "M1001", "Mera ek payment fail hua")
+    assert (t["status"], t["outcome"]) == ("NEEDS_INFO", "PAYMENT_NOT_FOUND")
+    assert "UTR number (12 digit)" in t["reply"] and "T se shuru" in t["reply"]          # Hinglish ask
+    assert not [c for c in tools_called(ev) if c in ("recheck_payment_status", "mark_payment_recovered")]
+    assert store.transaction("T88120045")["gateway_status"] == "FAILED"                  # nothing was touched
+    assert any(q.get("action") == "add_txn_id" for q in t["card"]["quick"])              # quick-reply hints
+
+
+def test_multi_turn_transaction_id_continues_the_same_case(store):
+    first, _ = send(store, "M1001", "Mera ek payment fail hua")
+    second, _ = send(store, "M1001", "T88120045")
+    assert second["id"] == first["id"] and len(store.tickets(limit=100)) == 1           # same case, not a new ticket
+    assert (second["status"], second["outcome"], second["recovered_amount"]) == ("RESOLVED_AI", "PAYMENT_RECOVERED", 1250)
+    assert second["lang"] == "hinglish" and "₹1,250" in second["reply"]                 # an ID alone keeps the earlier language
+    assert second["card"]["amount"] == "₹1,250"
+    assert store.pending("M1001") is None
+
+
+def test_multi_turn_answered_with_a_12_digit_utr(store):
+    send(store, "M1001", "Mera ek payment fail hua")
+    t, _ = send(store, "M1001", "UTR 488120045011")
+    assert t["outcome"] == "PAYMENT_RECOVERED" and t["recovered_amount"] == 1250
+
+
+def test_multi_turn_answered_with_just_the_amount(store):
+    send(store, "M1001", "Mera ek payment fail hua")
+    t, _ = send(store, "M1001", "₹1,250")
+    assert t["outcome"] == "PAYMENT_RECOVERED"
+
+
+def test_utr_survives_pii_masking(store):
+    from app.guardrails import mask_pii
+    assert "488120045011" not in mask_pii("payment UTR 488120045011 failed")           # the mask hides it...
+    t, _ = send(store, "M1001", "payment UTR 488120045011 failed")                      # ...but entities are read before masking
+    assert t["outcome"] == "PAYMENT_RECOVERED"
+
+
+def test_unknown_id_asks_to_recheck_and_does_not_escalate(store):
+    t, _ = send(store, "M1001", "payment T99999999 failed")
+    assert (t["status"], t["outcome"]) == ("NEEDS_INFO", "ID_NOT_FOUND") and "T99999999" in t["reply"]
+    assert "re-check" in t["reply"] and not store.escalations()
+    again, _ = send(store, "M1001", "T88120045")                                         # the corrected ID continues the case
+    assert again["id"] == t["id"] and again["outcome"] == "PAYMENT_RECOVERED"
+
+
+def test_another_merchants_id_is_treated_as_not_found(store):
+    t, _ = send(store, "M1001", "payment T88230501 failed")                              # belongs to Annapurna Sweets
+    assert t["outcome"] == "ID_NOT_FOUND"
+
+
+def test_another_or_different_payment_asks_instead_of_defaulting(store):
+    t, _ = send(store, "M1001", "another payment failed, money was deducted")
+    assert t["outcome"] == "PAYMENT_NOT_FOUND"
+
+
+def test_two_failed_payments_and_no_amount_asks_which(store):
+    t, _ = send(store, "M1003", "customer ke paise kat gaye payment fail dikha raha")    # Anil has two debited failures
+    assert t["outcome"] == "PAYMENT_NOT_FOUND"
+    t2, _ = send(store, "M1003", "₹860")
+    assert t2["id"] == t["id"] and t2["outcome"] == "PAYMENT_RECOVERED" and t2["recovered_amount"] == 860
+
+
+def test_giving_up_after_three_unanswered_asks_hands_over(store):
+    a, _ = send(store, "M1001", "Mera ek payment fail hua")
+    b, _ = send(store, "M1001", "T99999991")
+    c, _ = send(store, "M1001", "T99999992")
+    assert a["id"] == b["id"] == c["id"] and c["status"] == "ESCALATED" and c["outcome"] == "LOW_CONFIDENCE"
+
+
+def test_a_succeeded_payment_is_never_recovered_twice(store):
+    t, ev = send(store, "M1001", "payment T88120012 failed")                             # this one went through normally
+    assert t["outcome"] == "PAYMENT_ALREADY_OK" and "mark_payment_recovered" not in tools_called(ev)
+    from app.guardrails import check as guard
+    assert not guard("mark_payment_recovered", {"txn_id": "T88120012"}, store, "M1001")["allowed"]
+
+
+@pytest.mark.parametrize("text,lang", [("hi", "hinglish"), ("Hello!", "hinglish"), ("namaste", "hinglish"), ("thanks a lot", "hinglish"),
+                                       ("ok", "hinglish"), ("thik hai bhai", "hinglish"), ("धन्यवाद", "hinglish")])
+def test_small_talk_gets_a_friendly_reply_and_never_escalates(store, text, lang):
+    t, ev = send(store, "M1001", text)
+    assert t["status"] == "RESOLVED_AI" and t["outcome"].startswith("SMALL_TALK") and t["lang"] == lang
+    assert not store.escalations() and not tools_called(ev)
+    assert len(t["card"]["quick"]) == 6                                                  # quick options
+    assert ops.metrics(store)["total"] == 0                                              # greetings are not support tickets
+
+
+def test_small_talk_does_not_forget_the_open_question(store):
+    first, _ = send(store, "M1001", "Mera ek payment fail hua")
+    send(store, "M1001", "ok")
+    t, _ = send(store, "M1001", "T88120045")
+    assert t["id"] == first["id"] and t["outcome"] == "PAYMENT_RECOVERED"
+
+
+def test_ambiguous_message_asks_one_question_with_chips_then_continues(store):
+    t, _ = send(store, "M1002", "Something is off with my account, can you look into it?")
+    assert (t["status"], t["outcome"]) == ("NEEDS_INFO", "CLARIFY") and not store.escalations()
+    assert [q["send"] for q in t["card"]["quick"]] == ["Payment failed", "Settlement", "Refund", "Soundbox", "KYC", "Talk to a person"]
+    t2, _ = send(store, "M1002", "Refund")                                               # the merchant taps a chip
+    assert t2["id"] == t["id"] and t2["outcome"] == "REFUND_NEEDS_APPROVAL"
+
+
+def test_a_person_is_still_one_message_away(store):
+    send(store, "M1002", "Something is off with my account, can you look into it?")
+    t, _ = send(store, "M1002", "Talk to a person")
+    assert t["outcome"] == "HUMAN_HANDOFF" and t["status"] == "ESCALATED"
+
+
+@pytest.mark.parametrize("text,amount", [("₹1,250 failed", 1250), ("Rs 1250 payment", 1250), ("Rs. 1,250", 1250), ("1250 rupees kata", 1250),
+                                         ("1250 ka payment fail", 1250), ("1.2k payment failed", 1200), ("5k refund", 5000),
+                                         ("1250 रुपये कट गए", 1250), ("1000rs refund", 1000), ("2000 refund not done", 2000)])
+def test_amount_formats(text, amount):
+    assert extract_entities(text)["amount"] == amount
+
+
+def test_a_utr_is_not_an_amount_and_ids_are_extracted():
+    e = extract_entities("UTR 488120045011 ka status, T88120045, R77812, S2610300")
+    assert e["utr"] == "488120045011" and "amount" not in e
+    assert (e["txn_id"], e["refund_id"], e["settlement_id"]) == ("T88120045", "R77812", "S2610300")
+
+
+def test_find_transaction_by_utr_is_scoped_to_the_merchant(store):
+    from app.tools import find_transaction
+    assert find_transaction(store, "M1001", {"utr": "488120045011"})["txn_id"] == "T88120045"
+    assert "error" in find_transaction(store, "M1002", {"utr": "488120045011"})          # someone else's payment is invisible
+
+
+import json as _json  # noqa: E402
+from pathlib import Path as _Path  # noqa: E402
+
+MESSY = _json.loads((_Path(__file__).resolve().parents[2] / "shared" / "messy_tests.json").read_text(encoding="utf-8"))["items"]
+
+
+@pytest.mark.parametrize("item", MESSY, ids=[m["id"] for m in MESSY])
+def test_messy_messages(item):
+    from app.agents.triage import rules_triage
+    r = rules_triage(item["text"])
+    assert r["intent"] == item["intent"], f'{item["text"]!r}: got {r["intent"]} ({r["confidence"]})'
+    if item["intent"] not in ("UNKNOWN", "SMALL_TALK"):
+        assert r["confidence"] >= 0.6

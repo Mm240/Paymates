@@ -16,7 +16,8 @@ Emit = Callable[[dict], Awaitable[None]]
 
 # ====================================================================== metrics
 def metrics(store: Store) -> dict:
-    ts = list(reversed(store.tickets(limit=100000)))      # oldest first
+    # Greetings and thanks are answered but are not support tickets: keep them out of every outcome metric.
+    ts = [t for t in reversed(store.tickets(limit=100000)) if not (t["outcome"] or "").startswith("SMALL_TALK")]   # oldest first
     total = len(ts)
     count = lambda s: sum(1 for t in ts if t["status"] == s)  # noqa: E731
     ai = count("RESOLVED_AI")
@@ -193,6 +194,6 @@ async def simulate(store: Store, n: int, emit: Emit, handle, seed: Optional[int]
         fields = _setup_case(store, rng, intent, mid)
         msg = rng.choice(LEXICON["simulation"][intent])["text"].format(**fields) if fields else \
             rng.choice(LEXICON["simulation"][intent])["text"].replace("{amount}", "")
-        ticket = await handle(store, mid, msg, _noop, source="simulated", pacing=0.0)
+        ticket = await handle(store, mid, msg, _noop, source="simulated", pacing=0.0, remember=False)
         await emit({"type": "sim_progress", "i": i + 1, "n": n, "ticket": ticket, "metrics": metrics(store)})
     return metrics(store)

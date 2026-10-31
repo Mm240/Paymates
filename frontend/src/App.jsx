@@ -113,7 +113,7 @@ export default function App() {
   // One handler for chat and check-in streams. A check-in streams several tickets; each 'ticket' event starts a fresh trace.
   const traceHandler = (mid) => (ev) => {
     if (ev.type === 'ticket') {
-      setTrace((t) => (ev.ticket.source === 'proactive'
+      setTrace((t) => (ev.ticket.source === 'proactive' || ev.ticket.resumed
         ? { merchantId: mid, message: ev.ticket.message, stages: {}, tools: [], reply: null, ticketId: ev.ticket.id, ticket: { ...ev.ticket, status: 'OPEN' } }
         : { ...t, ticketId: ev.ticket.id, ticket: { ...ev.ticket, status: 'OPEN' } }))
     } else if (ev.type === 'step') {

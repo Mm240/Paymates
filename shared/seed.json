@@ -6,9 +6,21 @@
     "council_daily_cap_kyc_pending": 2000,
     "default_autonomy": "standard",
     "autonomy_levels": {
-      "suggest": {"label": "Suggest only", "money_limit": 0, "explain": "Every money action waits for a human. PayMates still checks, explains and opens tickets."},
-      "low": {"label": "Low", "money_limit": 1000, "explain": "Money actions up to ₹1,000 run on their own; anything above waits for a human."},
-      "standard": {"label": "Standard", "money_limit": 5000, "explain": "Credits and refunds up to ₹5,000 run on their own, as do payout retries to the verified account."}
+      "suggest": {
+        "label": "Suggest only",
+        "money_limit": 0,
+        "explain": "Every money action waits for a human. PayMates still checks, explains and opens tickets."
+      },
+      "low": {
+        "label": "Low",
+        "money_limit": 1000,
+        "explain": "Money actions up to ₹1,000 run on their own; anything above waits for a human."
+      },
+      "standard": {
+        "label": "Standard",
+        "money_limit": 5000,
+        "explain": "Credits and refunds up to ₹5,000 run on their own, as do payout retries to the verified account."
+      }
     },
     "confidence_threshold": 0.6,
     "manual_minutes_per_ticket": 18,
@@ -116,7 +128,8 @@
       "at_min": -840,
       "gateway_status": "FAILED",
       "bank_debited": true,
-      "bank_status": "SUCCESS"
+      "bank_status": "SUCCESS",
+      "utr": "488120045011"
     },
     {
       "id": "T88120012",
@@ -127,7 +140,8 @@
       "at_min": -900,
       "gateway_status": "SUCCESS",
       "bank_debited": true,
-      "bank_status": "SUCCESS"
+      "bank_status": "SUCCESS",
+      "utr": "488120012048"
     },
     {
       "id": "T88119987",
@@ -138,7 +152,8 @@
       "at_min": -960,
       "gateway_status": "SUCCESS",
       "bank_debited": true,
-      "bank_status": "SUCCESS"
+      "bank_status": "SUCCESS",
+      "utr": "488119987085"
     },
     {
       "id": "T88120101",
@@ -149,7 +164,8 @@
       "at_min": -120,
       "gateway_status": "FAILED",
       "bank_debited": false,
-      "bank_status": "FAILED"
+      "bank_status": "FAILED",
+      "utr": "488120101122"
     },
     {
       "id": "T88230501",
@@ -160,7 +176,8 @@
       "at_min": -300,
       "gateway_status": "FAILED",
       "bank_debited": true,
-      "bank_status": "FAILED"
+      "bank_status": "FAILED",
+      "utr": "488230501159"
     },
     {
       "id": "T88230488",
@@ -171,7 +188,8 @@
       "at_min": -360,
       "gateway_status": "SUCCESS",
       "bank_debited": true,
-      "bank_status": "SUCCESS"
+      "bank_status": "SUCCESS",
+      "utr": "488230488196"
     },
     {
       "id": "T88229901",
@@ -182,12 +200,57 @@
       "at_min": -5800,
       "gateway_status": "SUCCESS",
       "bank_debited": true,
-      "bank_status": "SUCCESS"
+      "bank_status": "SUCCESS",
+      "utr": "488229901233"
     },
-    {"id": "T88340231", "merchant_id": "M1003", "amount": 1180, "method": "Card", "payer": "card ••4471", "at_min": -150, "gateway_status": "SUCCESS", "bank_debited": true, "bank_status": "SUCCESS"},
-    {"id": "T88120077", "merchant_id": "M1001", "amount": 650, "method": "Wallet", "payer": "paytm wallet ••2210", "at_min": -300, "gateway_status": "SUCCESS", "bank_debited": true, "bank_status": "SUCCESS"},
-    {"id": "T88340299", "merchant_id": "M1003", "amount": 860, "method": "UPI", "payer": "ritu.s@okaxis", "at_min": -90, "gateway_status": "FAILED", "bank_debited": true, "bank_status": "SUCCESS"},
-    {"id": "T88340266", "merchant_id": "M1003", "amount": 3400, "method": "UPI", "payer": "deepak.v@okhdfcbank", "at_min": -75, "gateway_status": "FAILED", "bank_debited": true, "bank_status": "SUCCESS"},
+    {
+      "id": "T88340231",
+      "merchant_id": "M1003",
+      "amount": 1180,
+      "method": "Card",
+      "payer": "card ••4471",
+      "at_min": -150,
+      "gateway_status": "SUCCESS",
+      "bank_debited": true,
+      "bank_status": "SUCCESS",
+      "utr": "488340231270"
+    },
+    {
+      "id": "T88120077",
+      "merchant_id": "M1001",
+      "amount": 650,
+      "method": "Wallet",
+      "payer": "paytm wallet ••2210",
+      "at_min": -300,
+      "gateway_status": "SUCCESS",
+      "bank_debited": true,
+      "bank_status": "SUCCESS",
+      "utr": "488120077307"
+    },
+    {
+      "id": "T88340299",
+      "merchant_id": "M1003",
+      "amount": 860,
+      "method": "UPI",
+      "payer": "ritu.s@okaxis",
+      "at_min": -90,
+      "gateway_status": "FAILED",
+      "bank_debited": true,
+      "bank_status": "SUCCESS",
+      "utr": "488340299344"
+    },
+    {
+      "id": "T88340266",
+      "merchant_id": "M1003",
+      "amount": 3400,
+      "method": "UPI",
+      "payer": "deepak.v@okhdfcbank",
+      "at_min": -75,
+      "gateway_status": "FAILED",
+      "bank_debited": true,
+      "bank_status": "SUCCESS",
+      "utr": "488340266381"
+    },
     {
       "id": "T88340210",
       "merchant_id": "M1003",
@@ -197,7 +260,8 @@
       "at_min": -200,
       "gateway_status": "SUCCESS",
       "bank_debited": true,
-      "bank_status": "SUCCESS"
+      "bank_status": "SUCCESS",
+      "utr": "488340210418"
     }
   ],
   "settlements": [

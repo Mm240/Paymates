@@ -55,7 +55,7 @@ export function StatusChip({ status }) {
 
 export const INTENT_LABEL = {
   FAILED_PAYMENT: 'Failed payment', SETTLEMENT_DELAY: 'Settlement', REFUND_ISSUE: 'Refund', SOUNDBOX: 'Soundbox', KYC: 'KYC',
-  HUMAN_REQUEST: 'Asked for a person', GENERAL: 'How-to question', UNKNOWN: 'Unclear',
+  HUMAN_REQUEST: 'Asked for a person', GENERAL: 'How-to question', SMALL_TALK: 'Greeting', UNKNOWN: 'Unclear',
 }
 
 export function fmtMs(ms, coarse = false) {

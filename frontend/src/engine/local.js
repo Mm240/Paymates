@@ -5,7 +5,7 @@
 import seed from '../../../shared/seed.json'
 import evalSet from '../../../shared/evals.json'
 import {
-  LEX, TPL, tokens, detectLanguage, keywordHits, extractEntities, inr, phrase, fill, render, ago, maskPii,
+  LEX, TPL, tokens, detectLanguage, keywordHits, extractEntities, smallTalkKind, inr, phrase, fill, render, ago, maskPii,
   HelpCenterIndex, LANG_LABEL,
 } from './core.js'
 
@@ -30,6 +30,7 @@ function freshStore() {
     tickets: [], ops: [], escalations: [], audit: [], messages: [],
     counters: { ticket: 2400, ops: 5100, esc: 300, utr: 880000, ref: 61000 },
     decisions: [],
+    pending: new Map(), // merchant id -> the question PayMates is waiting on
     settings: { autonomy_level: seed.policy.default_autonomy },
   }
   seed.merchants.forEach((m) => st.merchants.set(m.id, clone(m)))
@@ -78,6 +79,7 @@ function check(name, args, mid, approvedBy) {
   }
   if (name === 'mark_payment_recovered') {
     const t = S.txns.get(String(args.txn_id))
+    if (t.gateway_status === 'SUCCESS' && !t.recovered) return verdict(false, 'state-check', `${t.id} already succeeded; there is nothing to recover`)
     if (!t.bank_checked || t.bank_status !== 'SUCCESS') return verdict(false, 'evidence-required', 'Bank has not confirmed this payment; recheck status first')
     const held = !approvedBy && moneyHold(t.amount)
     if (held) return held
@@ -110,7 +112,7 @@ function check(name, args, mid, approvedBy) {
 }
 
 // ====================================================================== tools (mock Paytm APIs)
-const txnView = (t) => ({ txn_id: t.id, amount: t.amount, amount_display: inr(t.amount), method: t.method, payer: maskPii(t.payer),
+const txnView = (t) => ({ txn_id: t.id, utr: t.utr, amount: t.amount, amount_display: inr(t.amount), method: t.method, payer: maskPii(t.payer),
   gateway_status: t.gateway_status, customer_debited: t.bank_debited, recovered: t.recovered, minutes_ago: Math.round((now() - t.created_at) / 60000) })
 const refundView = (r) => ({ refund_id: r.id, txn_id: r.txn_id, amount: r.amount, amount_display: inr(r.amount), status: r.status,
   failure_reason: r.reason, arn: r.arn, eta_minutes: r.eta_at ? Math.max(0, Math.round((r.eta_at - now()) / 60000)) : null })
@@ -125,6 +127,12 @@ const IMPL = {
     transactions: [...S.txns.values()].filter((t) => t.merchant_id === mid && (!a.status || t.gateway_status === String(a.status).toUpperCase()))
       .sort(byDesc('created_at')).slice(0, a.limit || 6).map(txnView),
   }),
+  // Look a payment up by its 12-digit UPI UTR or by transaction ID. Only this merchant's payments are visible.
+  find_transaction: (mid, a) => {
+    const t = a.utr ? [...S.txns.values()].find((x) => x.utr === String(a.utr) && x.merchant_id === mid)
+      : a.txn_id ? (S.txns.get(String(a.txn_id))?.merchant_id === mid ? S.txns.get(String(a.txn_id)) : null) : null
+    return t ? txnView(t) : { error: 'not found' }
+  },
   get_transaction: (mid, a) => { const t = S.txns.get(String(a.txn_id)); return t ? txnView(t) : { error: 'not found' } },
   recheck_payment_status: (mid, a) => {
     const t = S.txns.get(String(a.txn_id))
@@ -208,6 +216,7 @@ const schema = (props = {}, required = []) => ({ type: 'object', properties: pro
 export const TOOL_DEFS = {
   get_merchant_profile: ['read', "Get the merchant's profile: plan, KYC status, bank, settlement cycle.", schema()],
   list_transactions: ['read', "List the merchant's recent payments. Optional status filter: SUCCESS or FAILED.", schema({ status: { type: 'string', enum: ['SUCCESS', 'FAILED'] }, limit: { type: 'integer' } })],
+  find_transaction: ['read', "Find a payment by its 12-digit UPI UTR/RRN or by transaction ID (starts with T). Returns an error if there is no such payment on this merchant's account.", schema({ utr: { type: 'string' }, txn_id: { type: 'string' } })],
   get_transaction: ['read', 'Get one payment by transaction ID.', schema({ txn_id: { type: 'string' } }, ['txn_id'])],
   recheck_payment_status: ['check', "Ask the customer's bank / UPI network for the final status of a payment that shows FAILED. Required before marking it recovered.", schema({ txn_id: { type: 'string' } }, ['txn_id'])],
   mark_payment_recovered: ['write', "Mark a bank-confirmed payment as successful and credit it to the merchant's next settlement. Moves money; guarded.", schema({ txn_id: { type: 'string' } }, ['txn_id'])],
@@ -383,11 +392,17 @@ const INTENTS = {
   KYC: 'KYC status, verification or which documents are needed.',
   HUMAN_REQUEST: 'The merchant explicitly asks for a human, a call, or a manager.',
   GENERAL: 'A how-to or policy question answerable from the help center.',
+  SMALL_TALK: 'Only a greeting, thanks or acknowledgement (hi, hello, namaste, thanks, ok, thik hai).',
   UNKNOWN: 'Unclear or out of scope.',
 }
 const MONEY = new Set(['FAILED_PAYMENT', 'SETTLEMENT_DELAY', 'REFUND_ISSUE'])
 
 export function rulesTriage(text) {
+  const kind = smallTalkKind(text)
+  if (kind) {
+    return { intent: 'SMALL_TALK', confidence: 0.95, entities: { small_talk: kind }, urgency: 'low', language: detectLanguage(text),
+      reasoning: `Only a ${kind === 'greet' ? 'greeting' : 'thanks or acknowledgement'}` }
+  }
   const weights = LEX.intent_weights || {}
   const hits = {}, scores = {}
   for (const [intent, kws] of Object.entries(LEX.intents)) {
@@ -420,10 +435,19 @@ export function rulesTriage(text) {
   }
 }
 
+// Merge IDs and amounts read from the RAW message into a triage result. Triage runs on PII-masked text, which hides long
+// numbers such as a 12-digit UTR, so entities always come from the original text. A UTR on its own means a payment question.
+function withRawEntities(tri, rawText) {
+  const ents = extractEntities(rawText)
+  const out = { ...tri, entities: { ...tri.entities, ...ents } }
+  if (ents.utr && ['UNKNOWN', 'GENERAL'].includes(out.intent)) Object.assign(out, { intent: 'FAILED_PAYMENT', confidence: Math.max(out.confidence, 0.8), reasoning: 'A UTR number means a payment question' })
+  return out
+}
+
 async function triage(text) {
   const rules = rulesTriage(text)
   const m = await modelFor('triage')
-  if (!m) return [rules, 'rules-engine']
+  if (!m || rules.intent === 'SMALL_TALK') return [rules, 'rules-engine']
   try {
     const data = await m.sample.json(
       'You are the triage agent of PayMates, an AI support teammate for Indian payment merchants. Classify the merchant message ' +
@@ -493,20 +517,33 @@ const res = (status, outcome, facts, summary, proposed = null, reason = null) =>
 })
 const reasonText = (code, lang) => (code && TPL.phrases[`reason_${code}`] ? phrase(`reason_${code}`, lang) : code || '')
 
+// Not enough to go on: ask the merchant for the reference instead of acting on a guess.
+const ask = (outcome, base, why, facts = {}) => res('NEEDS_INFO', outcome, { ...base, ...facts }, why)
+
 async function pbFailedPayment(run, tri, base) {
   const ents = tri.entities
-  let txn = null
-  if (ents.txn_id) { const r = await run.run('get_transaction', { txn_id: ents.txn_id }); if (!r.blocked && !r.error) txn = r }
-  if (!txn) {
-    const r = await run.run('list_transactions', { status: 'FAILED' })
-    let c = r.transactions || []
-    if (ents.amount) { const f = c.filter((t) => t.amount === ents.amount); if (f.length) c = f }
-    c.sort((a, b) => (a.customer_debited === b.customer_debited ? 0 : a.customer_debited ? -1 : 1) || (a.recovered - b.recovered) || (a.minutes_ago - b.minutes_ago))
-    txn = c[0] || null
+  let txn
+  const ref = ents.utr || ents.txn_id
+  if (ref) {
+    const r = await run.run('find_transaction', ents.utr ? { utr: ents.utr } : { txn_id: ents.txn_id })
+    if (!r.txn_id) return ask('ID_NOT_FOUND', base, `${ref} is not on this merchant's account; asked them to re-check it`, { ref })
+    txn = r
+  } else {
+    const r = await run.run('list_transactions', { status: 'FAILED', limit: 20 })
+    let cands = (r.transactions || []).filter((t) => !t.recovered)
+    if (ents.amount != null) cands = cands.filter((t) => t.amount === ents.amount)
+    const debited = cands.filter((t) => t.customer_debited)
+    if (!cands.length) return ask('PAYMENT_NOT_FOUND', base, 'No failed payment matches what the merchant said; asked for the UTR or transaction ID')
+    // With no ID or amount, act only if the merchant says money was taken AND exactly one payment fits.
+    // A bare "a payment failed" is not enough to move money.
+    if (ents.amount == null && (ents.other || !ents.debited || debited.length > 1 || (!debited.length && cands.length > 1))) {
+      return ask('PAYMENT_NOT_FOUND', base, 'Not enough to pick one payment safely; asked for the UTR or transaction ID')
+    }
+    txn = [...(debited.length ? debited : cands)].sort((a, b) => a.minutes_ago - b.minutes_ago)[0]
   }
-  if (!txn) return res('NEEDS_INFO', 'PAYMENT_NOT_FOUND', base, 'No matching failed payment found; asked merchant for details')
   const facts = { ...base, txn_id: txn.txn_id, amount: inr(txn.amount) }
   if (txn.recovered) return res('RESOLVED_AI', 'PAYMENT_RECOVERED', facts, `${txn.txn_id} was already recovered`)
+  if (txn.gateway_status === 'SUCCESS') return res('RESOLVED_AI', 'PAYMENT_ALREADY_OK', facts, `${txn.txn_id} succeeded normally; nothing to recover`)
   if (!txn.customer_debited) return res('RESOLVED_AI', 'PAYMENT_NOT_DEBITED', facts, `${txn.txn_id} failed before debit; no money moved`)
   const chk = await run.run('recheck_payment_status', { txn_id: txn.txn_id })
   if (chk.bank_final_status === 'SUCCESS') {
@@ -522,10 +559,22 @@ async function pbFailedPayment(run, tri, base) {
 
 async function pbSettlement(run, tri, base) {
   const lang = tri.language
-  const r = await run.run('list_settlements', {})
+  const ents = tri.entities
+  const r = await run.run('list_settlements', { limit: 20 })
   const ss = r.settlements || []
-  const sid = tri.entities.settlement_id
-  const target = (sid && ss.find((s) => s.settlement_id === sid)) || ss.find((s) => s.status === 'ON_HOLD') || ss.find((s) => s.status === 'PROCESSING') || ss[0]
+  const sid = ents.settlement_id, utr = ents.utr
+  let target
+  if (sid || utr) {
+    target = ss.find((s) => s.settlement_id === sid || (utr && s.utr === utr))
+    if (!target) return ask('ID_NOT_FOUND', base, `${sid || utr} is not a settlement on this account; asked them to re-check it`, { ref: sid || utr })
+  } else if (ents.amount != null) {
+    target = ss.find((s) => s.amount === ents.amount)
+    if (!target) return ask('SETTLEMENT_NOT_FOUND', base, `No settlement of ${inr(ents.amount)}; asked for the UTR or transaction ID`)
+  } else if (ents.other && ss.length) {
+    return ask('SETTLEMENT_NOT_FOUND', base, 'Merchant means a different settlement; asked which one')
+  } else {
+    target = ss.find((s) => s.status === 'ON_HOLD') || ss.find((s) => s.status === 'PROCESSING') || ss[0]
+  }
   if (!target) return res('RESOLVED_AI', 'FAQ_ANSWER', { ...base, answer: seed.kb[0].short[lang] }, 'No settlements yet; explained timelines')
   const row = S.settlements.get(target.settlement_id)
   const facts = { ...base, settlement_id: row.id, amount: inr(row.amount), bank: row.destination, bank_name: row.destination.split(' ••')[0], utr: row.utr || '-' }
@@ -552,16 +601,27 @@ async function pbSettlement(run, tri, base) {
 async function pbRefund(run, tri, base) {
   const ents = tri.entities, lang = tri.language
   let rf = null
-  if (ents.refund_id) { const r = await run.run('get_refund', { refund_id: ents.refund_id }); if (!r.blocked && !r.error) rf = r }
-  if (!rf) {
-    const r = await run.run('list_refunds', {})
-    let c = r.refunds || []
-    if (ents.amount != null) c = c.filter((x) => x.amount === ents.amount)
+  if (ents.refund_id) {
+    const r = await run.run('get_refund', { refund_id: ents.refund_id })
+    if (r.blocked || r.error) return ask('ID_NOT_FOUND', base, `${ents.refund_id} is not a refund on this account; asked them to re-check it`, { ref: ents.refund_id })
+    rf = r
+  } else {
+    const r = await run.run('list_refunds', { limit: 20 })
+    let cands = r.refunds || []
+    const ref = ents.utr || ents.txn_id
+    if (ref) {
+      const t = await run.run('find_transaction', ents.utr ? { utr: ents.utr } : { txn_id: ents.txn_id })
+      if (!t.txn_id) return ask('ID_NOT_FOUND', base, `${ref} is not on this merchant's account; asked them to re-check it`, { ref })
+      cands = cands.filter((x) => x.txn_id === t.txn_id)
+    } else if (ents.amount != null) {
+      cands = cands.filter((x) => x.amount === ents.amount)
+    }
+    if (!cands.length || (!ref && ents.amount == null && ents.other)) return ask('REFUND_NOT_FOUND', base, 'No refund matches what the merchant said; asked for the refund ID, UTR or transaction ID')
+    const failed = cands.filter((x) => x.status === 'FAILED')
+    if (failed.length !== 1 && cands.length > 1 && ents.amount == null && !ref) return ask('REFUND_NOT_FOUND', base, `${failed.length || cands.length} refunds could match; asked which one`)
     const order = { FAILED: 0, PROCESSING: 1, PROCESSED: 2 }
-    c = [...c].sort((a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3))
-    rf = c[0] || null
+    rf = [...cands].sort((a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3))[0]
   }
-  if (!rf) return res('NEEDS_INFO', 'REFUND_NOT_FOUND', base, 'No matching refund found; asked for details')
   const row = S.refunds.get(rf.refund_id)
   const facts = { ...base, refund_id: row.id, amount: inr(row.amount) }
   if (row.status === 'PROCESSED') return res('RESOLVED_AI', 'REFUND_DONE', { ...facts, arn: row.arn || '-' }, `${row.id} already processed, ARN ${row.arn}`)
@@ -648,8 +708,14 @@ async function pbGeneral(run, tri, base, text) {
   return res('ESCALATE', 'LOW_CONFIDENCE', base, 'No confident answer in help center', null, 'No confident help-center answer')
 }
 
+function pbSmallTalk(tri, base, text) {
+  const kind = smallTalkKind(text) || tri.entities.small_talk || 'greet'
+  return res('RESOLVED_AI', kind === 'thanks' ? 'SMALL_TALK_THANKS' : 'SMALL_TALK_GREET', base, 'Small talk; answered with quick options')
+}
+
 function runPlaybook(run, tri, base, text) {
   switch (tri.intent) {
+    case 'SMALL_TALK': return pbSmallTalk(tri, base, text)
     case 'FAILED_PAYMENT': return pbFailedPayment(run, tri, base)
     case 'SETTLEMENT_DELAY': return pbSettlement(run, tri, base)
     case 'REFUND_ISSUE': return pbRefund(run, tri, base)
@@ -660,9 +726,9 @@ function runPlaybook(run, tri, base, text) {
 }
 
 const PLAYBOOK_HINTS = {
-  FAILED_PAYMENT: 'Find the failed payment (by ID, else amount, else most recent where the customer was debited). If debited, call recheck_payment_status. If the bank says SUCCESS, call mark_payment_recovered. If FAILED, explain auto-reversal.',
+  FAILED_PAYMENT: 'Find the payment with find_transaction (UTR or transaction ID) if given, else list_transactions(FAILED) and filter by amount. If no ID is given and more than one payment could match, or the ID is not found, do NOT pick one: finish with outcome needs_info. If the payment already succeeded, there is nothing to recover. If debited, call recheck_payment_status. If the bank says SUCCESS, call mark_payment_recovered. If FAILED, explain auto-reversal.',
   SETTLEMENT_DELAY: 'list_settlements. If ON_HOLD with BANK_TIMEOUT, call retry_settlement then raise_ticket (category settlements, P2). If KYC_PENDING, call get_kyc_status and raise_ticket (category kyc). If SETTLED, give the UTR.',
-  REFUND_ISSUE: 'Find the refund. PROCESSED -> give ARN. PROCESSING -> give ETA. FAILED -> call reinitiate_refund (held for approval if above limit).',
+  REFUND_ISSUE: 'Find the refund by ID or amount. If several could match and none is clearly the failed one, or the ID is not found, do NOT pick one: finish with outcome needs_info. PROCESSED -> give ARN. PROCESSING -> give ETA. FAILED -> call reinitiate_refund (held for approval if above limit).',
   SOUNDBOX: 'run_soundbox_diagnostics. Weak signal or offline -> reconnect_device. Missed announcements -> resend_missed_announcements, then play_test_announcement. Volume 0 cannot be changed remotely: tell the merchant to press + 3 times. Language change -> set_announcement_language. Hardware fault or offline for hours -> raise_ticket (devices) for a replacement.',
   KYC: 'get_kyc_status and list any missing documents.',
   GENERAL: 'search_help_center and answer from the best result.',
@@ -721,7 +787,7 @@ async function act(run, tri, ctx, text, base) {
     const inf = inferOutcome(run.calls, base, summary)
     if (inf) return [inf, m.label]
     if (final.outcome === 'escalate') return [res('ESCALATE', 'LOW_CONFIDENCE', base, summary, null, summary), m.label]
-    if (final.outcome === 'needs_info') return [res('NEEDS_INFO', 'GENERIC_RESOLVED', { ...base, summary }, summary), m.label]
+    if (final.outcome === 'needs_info') return [res('NEEDS_INFO', { FAILED_PAYMENT: 'PAYMENT_NOT_FOUND', REFUND_ISSUE: 'REFUND_NOT_FOUND', SETTLEMENT_DELAY: 'SETTLEMENT_NOT_FOUND' }[tri.intent] || 'GENERIC_RESOLVED', { ...base, summary }, summary), m.label]
     return [res('RESOLVED_AI', 'GENERIC_RESOLVED', { ...base, summary }, summary), m.label]
   } catch (e) {
     const note = e?.code || e?.message || 'error'
@@ -811,10 +877,12 @@ async function buildBriefing(merchant, text, tri, act, calls) {
 
 const CRITICAL = /₹[\d,]+|\b[A-Z]{1,4}-?\d{4,}\b|\b[A-Z]{4}\d{8,}\b/g
 const LANG_NAMES = { en: 'English', hi: 'Hindi in Devanagari script', hinglish: 'Hinglish (Hindi written in Latin script, casual and warm)' }
+// Fixed wording: asking for an ID, small talk and clarifying questions are sent exactly as written.
+const STATIC_REPLIES = new Set(['FAQ_ANSWER', 'PAYMENT_NOT_FOUND', 'REFUND_NOT_FOUND', 'SETTLEMENT_NOT_FOUND', 'ID_NOT_FOUND', 'SMALL_TALK_GREET', 'SMALL_TALK_THANKS', 'CLARIFY'])
 async function respond(outcome, facts, lang, text) {
   const draft = render(outcome, lang, facts)
   const m = await modelFor('responder')
-  if (!m || outcome === 'FAQ_ANSWER') return [draft, 'templates', true]
+  if (!m || STATIC_REPLIES.has(outcome)) return [draft, 'templates', true]
   try {
     const out = await m.sample(`You are PayMates, a friendly support teammate for small Indian merchants. Rewrite the DRAFT reply so it sounds natural and warm in ${LANG_NAMES[lang]}. ` +
       'Keep it under 70 words. Keep every amount, ID and reference EXACTLY as written. Do not add facts, promises or links. Reply with only the message text.\n\n' +
@@ -842,6 +910,10 @@ export function buildCard(outcome, facts, lang, mid = null, extra = {}) {
     refs: pairs(spec.refs), rows: pairs(spec.rows),
     steps: (spec.steps || []).map(([k, state]) => ({ label: cardLabel(k, lang), state })),
     actions: (spec.actions || []).map((a) => ({ label: cardLabel(`a_${a}`, lang), action: a })).slice(0, 2),
+    quick: (spec.quick || []).map((q) => {
+      const [kind, key] = q.split(':')
+      return kind === 'send' ? { label: cardLabel(key, lang), send: cardLabel(key, lang) } : { label: cardLabel(`a_${key}`, lang), action: key }
+    }),
   }
   if (extra.escalation_id) card.refs.push({ label: cardLabel('l_case', lang), value: extra.escalation_id })
   if (spec.type === 'council_hold' && extra.votes) card.rows.push(...extra.votes.map((v) => ({ label: v.seat, value: cardLabel(`v_${v.vote}`, lang), vote: v.vote })))
@@ -865,24 +937,53 @@ function hisaabCard(lang, upi, cardAmt, items) {
 }
 
 // ====================================================================== orchestrator
-export async function handleMessage(mid, text, emit = async () => {}, { source = 'live', pacing = 450, watch = null } = {}) {
+// Outcomes that wait on the merchant. The merchant's next message continues the SAME ticket.
+const ASK_REFERENCE = new Set(['PAYMENT_NOT_FOUND', 'REFUND_NOT_FOUND', 'SETTLEMENT_NOT_FOUND', 'ID_NOT_FOUND'])
+const ID_KEYS = ['utr', 'txn_id', 'refund_id', 'settlement_id']
+const CLARIFY_TURNS = 2 // unclear turns before a human is brought in
+const REFERENCE_TURNS = 3 // tries at naming the record before a human is brought in
+const PENDING_MAX_AGE = 30 * 60000
+
+// An answer that is only an ID or a number carries no language of its own: keep the language the merchant was using.
+const followupLanguage = (text, prior) => (text.split(/\s+/).filter((w) => w && !/\d/.test(w)).length <= 2 ? prior : detectLanguage(text))
+
+export async function handleMessage(mid, text, emit = async () => {}, { source = 'live', pacing = 450, watch = null, remember = true } = {}) {
   const merchant = S.merchants.get(mid)
   let paced = 0, lastPace = 0
   const pace = async (f = 1) => { lastPace = 0; if (pacing > 0) { paced += pacing * f; lastPace = pacing * f; await sleep(pacing * f) } }
   const started = performance.now()
-  const ticketId = nextId('ticket', 'PM-')
-  const created = now()
-  const ticket = { id: ticketId, merchant_id: mid, message: text, lang: 'en', intent: null, confidence: null, status: 'OPEN', outcome: null,
-    summary: null, reply: null, created_at: created, resolved_at: null, duration_ms: null, recovered_amount: 0, models: {}, source,
-    subject: watch ? watch.subject : null, facts: {} }
-  S.tickets.push(ticket)
+
+  // Conversation memory: is this message the answer to a question PayMates asked?
+  const rawEnts = watch ? {} : extractEntities(text)
+  let pend = remember && !watch ? S.pending.get(mid) : null
+  if (pend && now() - pend.ts > PENDING_MAX_AGE) pend = null
+  let resume = null
+  if (pend && !smallTalkKind(text)) {
+    const answers = ID_KEYS.some((k) => rawEnts[k]) || rawEnts.amount != null
+    if (pend.kind === 'clarify' || (pend.kind === 'reference' && answers)) resume = pend
+  }
+
+  let ticketId, created, ticket
+  if (resume) {
+    ticket = S.tickets.find((t) => t.id === resume.ticket_id)
+    ticketId = ticket.id
+    created = ticket.created_at
+    Object.assign(ticket, { status: 'OPEN', outcome: null, summary: null, reply: null, resolved_at: null })
+  } else {
+    ticketId = nextId('ticket', 'PM-')
+    created = now()
+    ticket = { id: ticketId, merchant_id: mid, message: text, lang: 'en', intent: null, confidence: null, status: 'OPEN', outcome: null,
+      summary: null, reply: null, created_at: created, resolved_at: null, duration_ms: null, recovered_amount: 0, models: {}, source,
+      subject: watch ? watch.subject : null, facts: {} }
+    S.tickets.push(ticket)
+  }
   if (watch) {
     audit(ticketId, 'watcher', 'noticed', { kind: watch.kind, subject: watch.subject, title: watch.title })
   } else {
     S.messages.push({ merchant_id: mid, role: 'merchant', text, ts: created, ticket_id: ticketId })
     audit(ticketId, 'merchant', 'message', { text: maskPii(text) })
   }
-  await emit({ type: 'ticket', ticket: { id: ticketId, merchant_id: mid, created_at: created, message: text, source } })
+  await emit({ type: 'ticket', ticket: { id: ticketId, merchant_id: mid, created_at: created, message: text, source, resumed: Boolean(resume) } })
   const models = {}
   const step = (agent, status, title, extra = {}) => emit({ type: 'step', agent, status, title, ...extra })
   const ms = (t) => Math.max(0, Math.round(performance.now() - t - lastPace))
@@ -902,10 +1003,19 @@ export async function handleMessage(mid, text, emit = async () => {}, { source =
   const [tri, triModel] = watch
     ? [{ intent: watch.intent, confidence: 1, entities: watch.entities, urgency: watch.kind === 'soundbox' ? 'medium' : 'high',
       language: merchant.lang, reasoning: `Raised by the watcher from ${watch.subject}` }, 'watcher: from records']
-    : await triage(text)
+    : resume && resume.kind === 'reference'
+      // They answered the question we asked: same issue, now with the reference. No need to classify again.
+      ? [{ intent: resume.intent, confidence: 1, entities: { ...resume.entities, ...rawEnts }, urgency: 'high', language: followupLanguage(text, resume.language),
+        reasoning: `Continuing the earlier question about ${resume.intent.replace(/_/g, ' ').toLowerCase()}` }, 'memory: pending question']
+      : await triage(text)
+  if (!watch && !(resume && resume.kind === 'reference')) {
+    // IDs and amounts come from the raw text; masking hides long numbers.
+    Object.assign(tri, withRawEntities(tri, text))
+    if (tri.intent === 'SMALL_TALK') tri.language = merchant.lang // "hi" carries no language: greet in the merchant's own
+  }
   models.triage = triModel
   await pace()
-  await step('triage', 'done', `${tri.intent.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())} · ${Math.round(tri.confidence * 100)}% sure`, { model: models.triage, ms: ms(t0), data: tri })
+  await step('triage', 'done', (resume && resume.kind === 'reference' ? `Continuing ${ticketId} · ` : '') + `${tri.intent.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())} · ${Math.round(tri.confidence * 100)}% sure`, { model: models.triage, ms: ms(t0), data: tri })
 
   const base = { owner_first: merchant.owner.split(' ')[0], ticket_id: ticketId }
   const run = new ToolRunner(mid, ticketId, emit)
@@ -924,11 +1034,21 @@ export async function handleMessage(mid, text, emit = async () => {}, { source =
     a = res('ESCALATE', 'HUMAN_HANDOFF', base, 'Merchant asked for a person', null, 'Merchant asked for a person')
     models.action = 'policy: honour human request'
     await step('action', 'done', "Merchant asked for a person, so I'm handing over", { model: models.action, ms: 0, data: { decision: 'handoff' } })
+  } else if (tri.intent === 'SMALL_TALK') {
+    a = res('RESOLVED_AI', tri.entities.small_talk === 'thanks' ? 'SMALL_TALK_THANKS' : 'SMALL_TALK_GREET', base, 'Small talk; answered with quick options')
+    models.action = 'policy: small talk is never escalated'
+    await step('action', 'done', "Just a greeting, so I'm answering and offering options", { model: models.action, ms: 0, data: { decision: 'small_talk' } })
   } else if (tri.confidence < threshold || tri.intent === 'UNKNOWN') {
-    a = res('ESCALATE', 'LOW_CONFIDENCE', base, `Triage confidence ${Math.round(tri.confidence * 100)}% is below the ${Math.round(threshold * 100)}% threshold`, null,
-      `Not confident enough to act (${Math.round(tri.confidence * 100)}%)`)
-    models.action = 'policy: confidence threshold'
-    await step('action', 'blocked', "Not sure enough to act, so I'm escalating instead of guessing", { model: models.action, ms: 0, data: { decision: 'escalate', threshold } })
+    if (resume && resume.kind === 'clarify') {
+      // Second unclear turn in a row: stop asking and bring in a person.
+      a = res('ESCALATE', 'LOW_CONFIDENCE', base, `Still unclear after ${CLARIFY_TURNS} turns`, null, `Still unclear after ${CLARIFY_TURNS} turns`)
+      models.action = 'policy: unclear twice'
+      await step('action', 'blocked', "Still not clear after asking, so I'm handing over to a person", { model: models.action, ms: 0, data: { decision: 'escalate', threshold } })
+    } else {
+      a = res('NEEDS_INFO', 'CLARIFY', base, 'Message unclear; asked one clarifying question')
+      models.action = 'policy: ask before guessing'
+      await step('action', 'done', "Not sure what this is about, so I'm asking one question instead of guessing", { model: models.action, ms: 0, data: { decision: 'clarify', threshold } })
+    }
   } else {
     await step('action', 'running', 'Deciding and acting')
     t0 = performance.now()
@@ -939,6 +1059,10 @@ export async function handleMessage(mid, text, emit = async () => {}, { source =
     await step('action', a.status === 'ESCALATE' ? 'blocked' : 'done',
       `${run.calls.length} tool calls · ${writes} action(s) taken${run.blocked.length ? ` · ${run.blocked.length} held for approval` : ''}`,
       { model: models.action, ms: ms(t0), data: { summary: a.summary, outcome: a.outcome, fallback: a.fallback_note } })
+  }
+
+  if (ASK_REFERENCE.has(a.outcome) && resume && resume.kind === 'reference' && (resume.turns || 1) >= REFERENCE_TURNS - 1) {
+    a = res('ESCALATE', 'LOW_CONFIDENCE', base, `Could not identify the record after ${REFERENCE_TURNS} tries`, null, `Could not identify the record after ${REFERENCE_TURNS} tries`)
   }
 
   if (run.sessions.length) {
@@ -986,6 +1110,17 @@ export async function handleMessage(mid, text, emit = async () => {}, { source =
     duration_ms: Math.max(0, Math.round(performance.now() - started - paced)), resolved_at: status === 'RESOLVED_AI' ? now() : null,
     recovered_amount: run.recovered, models, card, facts: Object.fromEntries(Object.entries(a.facts).filter(([, v]) => ['string', 'number'].includes(typeof v))) })
   audit(ticketId, 'orchestrator', 'close', { status, outcome: a.outcome, duration_ms: ticket.duration_ms })
+  if (remember && !watch) {
+    if (ASK_REFERENCE.has(a.outcome)) {
+      const keep = Object.fromEntries(Object.entries(tri.entities).filter(([k]) => k === 'amount' || (ID_KEYS.includes(k) && a.outcome !== 'ID_NOT_FOUND')))
+      S.pending.set(mid, { kind: 'reference', intent: tri.intent, entities: keep, language: tri.language, ticket_id: ticketId,
+        turns: resume && resume.kind === 'reference' ? (resume.turns || 1) + 1 : 1, ts: now() })
+    } else if (a.outcome === 'CLARIFY') {
+      S.pending.set(mid, { kind: 'clarify', intent: null, entities: {}, language: tri.language, ticket_id: ticketId, turns: 1, ts: now() })
+    } else if (!a.outcome.startsWith('SMALL_TALK')) {
+      S.pending.delete(mid) // the case moved on; small talk keeps the open question open
+    }
+  }
   await emit({ type: 'done', ticket: clone(ticket), escalation: escalation && clone(escalation), card: clone(card) })
   return clone(ticket)
 }
@@ -1066,7 +1201,8 @@ export function sendHisaab(mid) {
 
 // ====================================================================== ops: metrics, human console, simulator
 export function metrics() {
-  const ts = S.tickets.filter((t) => t.source !== 'history').sort((a, b) => a.created_at - b.created_at)
+  // Greetings and thanks are answered but are not support tickets: keep them out of every outcome metric.
+  const ts = S.tickets.filter((t) => t.source !== 'history' && !(t.outcome || '').startsWith('SMALL_TALK')).sort((a, b) => a.created_at - b.created_at)
   const count = (s) => ts.filter((t) => t.status === s).length
   const ai = count('RESOLVED_AI')
   const durs = ts.filter((t) => t.status === 'RESOLVED_AI' && t.duration_ms != null).map((t) => t.duration_ms).sort((a, b) => a - b)
@@ -1187,7 +1323,7 @@ export async function simulate(n, onEvent = () => {}, seedVal = Date.now()) {
     }
     const tpl = pick(LEX.simulation[intent]).text
     const msg = fields.amount ? fill(tpl, fields) : tpl.replace('{amount}', '').replace(/ {2}/g, ' ')
-    const ticket = await handleMessage(mid, msg, async () => {}, { source: 'simulated', pacing: 0 })
+    const ticket = await handleMessage(mid, msg, async () => {}, { source: 'simulated', pacing: 0, remember: false })
     onEvent({ type: 'sim_progress', i: i + 1, n, ticket, metrics: metrics() })
     await sleep(140) // let the dashboard animate
   }

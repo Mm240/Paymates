@@ -22,7 +22,7 @@ OFFLINE_LONG_MIN = 6 * 60      # silent this long -> treat as a device that need
 
 # ---------------------------------------------------------------- tool implementations
 def _txn_view(t: dict) -> dict:
-    return {"txn_id": t["id"], "amount": t["amount"], "amount_display": inr(t["amount"]), "method": t["method"],
+    return {"txn_id": t["id"], "utr": t.get("utr"), "amount": t["amount"], "amount_display": inr(t["amount"]), "method": t["method"],
             "payer": mask_pii(t["payer"]), "gateway_status": t["gateway_status"],
             "customer_debited": t["bank_debited"], "recovered": t["recovered"],
             "minutes_ago": int((now_ms() - t["created_at"]) / 60000)}
@@ -43,6 +43,17 @@ def list_transactions(s: Store, mid: str, a: dict) -> dict:
 
 def get_transaction(s: Store, mid: str, a: dict) -> dict:
     t = s.transaction(str(a["txn_id"]))
+    return _txn_view(t) if t else {"error": "not found"}
+
+
+def find_transaction(s: Store, mid: str, a: dict) -> dict:
+    """Look a payment up by its 12-digit UPI UTR or by transaction ID. Only this merchant's payments are visible."""
+    t = None
+    if a.get("utr"):
+        t = s.transaction_by_utr(mid, str(a["utr"]))
+    elif a.get("txn_id"):
+        t = s.transaction(str(a["txn_id"]))
+        t = t if t and t["merchant_id"] == mid else None
     return _txn_view(t) if t else {"error": "not found"}
 
 
@@ -188,6 +199,8 @@ TOOLS: dict[str, tuple[Callable, str, str, dict]] = {
     "list_transactions": (list_transactions, "read", "List the merchant's recent payments. Optional status filter: SUCCESS or FAILED.",
                           _schema({"status": {"type": "string", "enum": ["SUCCESS", "FAILED"]}, "limit": {"type": "integer"}})),
     "get_transaction": (get_transaction, "read", "Get one payment by transaction ID.", _schema({"txn_id": {"type": "string"}}, ["txn_id"])),
+    "find_transaction": (find_transaction, "read", "Find a payment by its 12-digit UPI UTR/RRN or by transaction ID (starts with T). Returns an error if there is no such payment on this merchant's account.",
+                         _schema({"utr": {"type": "string"}, "txn_id": {"type": "string"}})),
     "recheck_payment_status": (recheck_payment_status, "check", "Ask the customer's bank / UPI network for the final status of a payment that shows FAILED. Required before marking it recovered.",
                                _schema({"txn_id": {"type": "string"}}, ["txn_id"])),
     "mark_payment_recovered": (mark_payment_recovered, "write", "Mark a bank-confirmed payment as successful and credit it to the merchant's next settlement. Moves money; guarded.",

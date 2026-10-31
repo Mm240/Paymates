@@ -45,7 +45,33 @@ def keyword_hits(text: str, keywords: list[str]) -> list[str]:
     return found
 
 
+_CUR = r"(?:₹|rs\.?|inr|rupees?|rupaye|rupay|रुपये|रुपए)"
+_NUM = r"(\d{1,7}(?:,\d{2,3})*(?:\.\d+)?)"
+_DEBITED = re.compile(r"deduct|debit|\bcut\b|\bkat\b|\bkata\b|kat (?:gay|gaye|gya)|money (?:gone|taken)|charged|कट|डेबिट", re.I)
+_OTHER = re.compile(r"\b(?:another|different|some other|other (?:payment|txn|transaction|refund|settlement)|do+sr[ae]|dusr[aei]|koi aur|alag)\b"
+                    r"|दूसरा|दूसरे|दूसरी|अलग|कोई और", re.I)
+
+
+def extract_amount(text: str) -> Optional[int]:
+    """₹1,250 · Rs 1250 · 1250 rupees · 1250 ka · 1.2k · 1250 रुपये. 12-digit UTRs and IDs are never amounts."""
+    m = (re.search(rf"{_CUR}\s?{_NUM}\s?(k)?(?![\w])", text, re.I)
+         or re.search(rf"(?<![\w.]){_NUM}\s?(k)?\s?(?:{_CUR}|ka|ke|ki|का|के|की)(?![\w])", text, re.I)
+         or re.search(r"(?<![\w.])(\d+(?:\.\d+)?)\s?(k)(?![\w])", text, re.I))
+    if not m and re.search(r"\brefund\b|रिफंड", text, re.I):
+        m = re.search(r"(?<![\w.])(\d{2,7}(?:,\d{2,3})*)(?![\w])", text)     # "2000 refund not done"
+    if not m:
+        return None
+    try:
+        value = float(m.group(1).replace(",", ""))
+    except ValueError:
+        return None
+    if m.lastindex and m.lastindex >= 2 and (m.group(2) or "").lower() == "k":
+        value *= 1000
+    return int(round(value))
+
+
 def extract_entities(text: str) -> dict:
+    """Pull IDs and the amount out of the RAW message. Call this before PII masking: the mask hides long numbers like a UTR."""
     ents: dict = {}
     if m := re.search(r"\bT\d{6,}\b", text, re.I):
         ents["txn_id"] = m.group(0).upper()
@@ -53,19 +79,39 @@ def extract_entities(text: str) -> dict:
         ents["settlement_id"] = m.group(0).upper()
     if m := re.search(r"\bR\d{4,}\b", text, re.I):
         ents["refund_id"] = m.group(0).upper()
-    if m := re.search(r"(?:₹|rs\.?|inr|rupees?)\s?([\d,]+)", text, re.I) or \
-            re.search(r"\b([\d,]{2,})\s?(?:rs\.?|rupees?|rupay|rupaye|रुपये)\b", text, re.I):
-        try:
-            ents["amount"] = int(m.group(1).replace(",", ""))
-        except ValueError:
-            pass
-    elif re.search(r"\brefund\b|रिफंड", text, re.I):
-        if m := re.search(r"\b([\d,]{2,})\b", text):
-            try:
-                ents["amount"] = int(m.group(1).replace(",", ""))
-            except ValueError:
-                pass
+    if m := re.search(r"(?<![\w.])\d{12}(?![\w])", text):
+        ents["utr"] = m.group(0)
+    amount = extract_amount(text)
+    if amount is not None:
+        ents["amount"] = amount
+    if _OTHER.search(text):
+        ents["other"] = True
+    if _DEBITED.search(text):
+        ents["debited"] = True      # the merchant says the customer's money was taken
     return ents
+
+
+# ---------------------------------------------------------------- small talk
+_GREET = {"hi", "hii", "hiii", "hello", "hey", "heyy", "hlo", "helo", "namaste", "namaskar", "hola", "good morning", "good afternoon",
+          "good evening", "gm", "नमस्ते", "नमस्कार", "हेलो", "हैलो", "हाय"}
+_THANKS = {"thanks", "thank you", "thankyou", "thx", "ty", "ok", "okay", "okk", "k", "kk", "thik hai", "theek hai", "thik", "theek", "shukriya",
+           "dhanyavad", "dhanyawad", "got it", "fine", "cool", "great", "accha", "achha", "acha", "bye", "धन्यवाद", "शुक्रिया", "ठीक है", "ठीक",
+           "अच्छा", "बढ़िया", "थैंक्यू", "थैंक यू"}
+_FILLER = {"a", "lot", "so", "much", "very", "bhai", "ji", "sir", "madam", "didi", "boss", "team", "paymates", "there", "again", "bahut", "जी", "भाई", "बहुत"}
+
+
+def small_talk_kind(text: str) -> Optional[str]:
+    """'greet' | 'thanks' for a message that is only a greeting or an acknowledgement, else None."""
+    t = re.sub(r"[\U0001F300-\U0001FAFF\u2600-\u27BF!?.,;:\"'()\[\]{}<>|/\\~*_-]+", " ", text.lower())
+    if not t.strip():
+        return "thanks" if re.search(r"[\U0001F44D\U0001F64F]", text) else None
+    words = [w for w in t.split() if w not in _FILLER]
+    phrase_ = " ".join(words)
+    if phrase_ in _GREET or (words and all(w in _GREET for w in words)):
+        return "greet"
+    if phrase_ in _THANKS or (words and all(w in _THANKS or w in _GREET for w in words) and any(w in _THANKS for w in words)):
+        return "thanks"
+    return None
 
 
 def inr(amount: Optional[float]) -> str:

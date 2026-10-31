@@ -58,6 +58,8 @@ def check(name: str, args: dict, store, merchant_id: str, approved_by: Optional[
 
     if name == "mark_payment_recovered":
         txn = store.transaction(str(args.get("txn_id")))
+        if txn["gateway_status"] == "SUCCESS" and not txn["recovered"]:
+            return verdict(False, "state-check", f"{txn['id']} already succeeded; there is nothing to recover")
         if not txn.get("bank_checked") or txn.get("bank_status") != "SUCCESS":
             return verdict(False, "evidence-required", "Bank has not confirmed this payment; recheck status first")
         if not approved_by and (held := money_hold(store, txn["amount"])):

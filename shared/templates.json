@@ -17,9 +17,9 @@
       "hi": "मैंने भुगतान {txn_id} ({amount}) जाँचा। यह ग्राहक के खाते से पैसा कटने से पहले ही फेल हो गया था, इसलिए कुछ वापस करने की ज़रूरत नहीं। ग्राहक बस दोबारा भुगतान कर दे।"
     },
     "PAYMENT_NOT_FOUND": {
-      "en": "I couldn't find a failed payment matching that. Could you share the transaction ID or the amount and roughly when it happened?",
-      "hinglish": "Mujhe aisa koi failed payment nahi mila. Transaction ID ya amount aur lagbhag time bata dijiye?",
-      "hi": "मुझे ऐसा कोई फेल भुगतान नहीं मिला। कृपया ट्रांज़ैक्शन ID या राशि और लगभग समय बताइए।"
+      "en": "Please share the UTR number (12 digits) or transaction ID (starts with T) and the amount, and I'll check it right away.",
+      "hinglish": "Kripya UTR number (12 digit) ya transaction ID (T se shuru hota hai) aur amount bhejiye, main turant check kar lunga.",
+      "hi": "कृपया UTR नंबर (12 अंक) या ट्रांज़ैक्शन ID (T से शुरू होती है) और राशि भेजिए, मैं तुरंत जाँच कर लूँगा।"
     },
     "SETTLEMENT_RETRIED": {
       "en": "Found it, {owner_first}. Your settlement {settlement_id} of {amount} was held because {bank_name}'s system timed out. I've re-sent it to your verified account {bank}; new reference {utr}. It should reach you within about 2 hours, and I'm tracking it under ticket {ticket_ref}.",
@@ -117,9 +117,9 @@
       "hi": "आपका सेटलमेंट {settlement_id} ({amount}) {bank} की ओर भेजा जा चुका है, रेफ़रेंस {utr}। लगभग 2 घंटे में आ जाना चाहिए।"
     },
     "REFUND_NOT_FOUND": {
-      "en": "I couldn't find a refund matching that. Could you share the refund ID or the amount?",
-      "hinglish": "Mujhe aisa koi refund nahi mila. Refund ID ya amount bata dijiye?",
-      "hi": "मुझे ऐसा कोई रिफंड नहीं मिला। कृपया रिफंड ID या राशि बताइए।"
+      "en": "Please share the refund ID (starts with R), the UTR number (12 digits) or transaction ID (starts with T), and the amount, and I'll check it right away.",
+      "hinglish": "Kripya refund ID (R se shuru hota hai), UTR number (12 digit) ya transaction ID (T se shuru hota hai) aur amount bhejiye, main turant check kar lunga.",
+      "hi": "कृपया रिफंड ID (R से शुरू होती है), UTR नंबर (12 अंक) या ट्रांज़ैक्शन ID (T से शुरू होती है) और राशि भेजिए, मैं तुरंत जाँच कर लूँगा।"
     },
     "GENERIC_RESOLVED": {
       "en": "{summary}",
@@ -175,6 +175,36 @@
       "en": "{owner_first}, here's today's hisaab. {upi} came in by UPI and is already in your bank. {card} from card and wallet payments arrives next working day. {fixed}",
       "hinglish": "{owner_first} ji, aaj ka hisaab: UPI se {upi} aaya, jo bank mein pahunch chuka hai. Card aur wallet ke {card} agle working day aayenge. {fixed}",
       "hi": "{owner_first} जी, आज का हिसाब: UPI से {upi} आया, जो बैंक में पहुँच चुका है। कार्ड और वॉलेट के {card} अगले कामकाजी दिन आएँगे। {fixed}"
+    },
+    "SETTLEMENT_NOT_FOUND": {
+      "en": "Please share the UTR number (12 digits) or transaction ID (starts with T) and the amount, and I'll check it right away.",
+      "hinglish": "Kripya UTR number (12 digit) ya transaction ID (T se shuru hota hai) aur amount bhejiye, main turant check kar lunga.",
+      "hi": "कृपया UTR नंबर (12 अंक) या ट्रांज़ैक्शन ID (T से शुरू होती है) और राशि भेजिए, मैं तुरंत जाँच कर लूँगा।"
+    },
+    "ID_NOT_FOUND": {
+      "en": "I couldn't find {ref} on your account. Please re-check the number and send it again.",
+      "hinglish": "Mujhe aapke account par {ref} nahi mila. Kripya number dobara check karke phir se bhejiye.",
+      "hi": "मुझे आपके खाते में {ref} नहीं मिला। कृपया नंबर दोबारा जाँचकर फिर से भेजिए।"
+    },
+    "SMALL_TALK_GREET": {
+      "en": "Hi {owner_first}! I'm PayMates. I can check a payment, settlement, refund, Soundbox or KYC. What do you need help with?",
+      "hinglish": "Namaste {owner_first} ji! Main PayMates hoon. Main payment, settlement, refund, Soundbox ya KYC check kar sakta hoon. Aapko kis cheez mein madad chahiye?",
+      "hi": "नमस्ते {owner_first} जी! मैं PayMates हूँ। मैं भुगतान, सेटलमेंट, रिफंड, साउंडबॉक्स या KYC जाँच सकता हूँ। आपको किस चीज़ में मदद चाहिए?"
+    },
+    "SMALL_TALK_THANKS": {
+      "en": "You're welcome, {owner_first}! I'm here whenever something comes up.",
+      "hinglish": "Koi baat nahi {owner_first} ji! Jab bhi zaroorat ho, main yahin hoon.",
+      "hi": "कोई बात नहीं {owner_first} जी! जब भी ज़रूरत हो, मैं यहीं हूँ।"
+    },
+    "CLARIFY": {
+      "en": "I want to get this right. Which one is this about?",
+      "hinglish": "Main sahi se samajhna chahta hoon. Yeh kis baare mein hai?",
+      "hi": "मैं सही से समझना चाहता हूँ। यह किस बारे में है?"
+    },
+    "PAYMENT_ALREADY_OK": {
+      "en": "Payment {txn_id} of {amount} went through successfully, so there's nothing to recover. It's already part of your next settlement.",
+      "hinglish": "Payment {txn_id} ({amount}) safal raha, isliye recover karne ko kuch nahi hai. Yeh aapke agle settlement mein pehle se shamil hai.",
+      "hi": "भुगतान {txn_id} ({amount}) सफल रहा, इसलिए वापस लाने को कुछ नहीं है। यह आपके अगले सेटलमेंट में पहले से शामिल है।"
     }
   },
   "action_done": {
@@ -973,6 +1003,66 @@
         "en": "Copy",
         "hinglish": "Copy",
         "hi": "कॉपी"
+      },
+      "topic_payment": {
+        "en": "Payment failed",
+        "hinglish": "Payment fail hua",
+        "hi": "भुगतान फेल हुआ"
+      },
+      "topic_settlement": {
+        "en": "Settlement",
+        "hinglish": "Settlement",
+        "hi": "सेटलमेंट"
+      },
+      "topic_refund": {
+        "en": "Refund",
+        "hinglish": "Refund",
+        "hi": "रिफंड"
+      },
+      "topic_soundbox": {
+        "en": "Soundbox",
+        "hinglish": "Soundbox",
+        "hi": "साउंडबॉक्स"
+      },
+      "topic_kyc": {
+        "en": "KYC",
+        "hinglish": "KYC",
+        "hi": "केवाईसी"
+      },
+      "topic_person": {
+        "en": "Talk to a person",
+        "hinglish": "Insaan se baat",
+        "hi": "इंसान से बात"
+      },
+      "t_need_ref": {
+        "en": "Need a few details",
+        "hinglish": "Thodi jaankari chahiye",
+        "hi": "थोड़ी जानकारी चाहिए"
+      },
+      "t_not_found": {
+        "en": "Couldn't find it",
+        "hinglish": "Nahi mila",
+        "hi": "नहीं मिला"
+      },
+      "t_payment_ok": {
+        "en": "Payment went through",
+        "hinglish": "Payment safal raha",
+        "hi": "भुगतान सफल रहा"
+      },
+      "sub_ask_ref": {
+        "en": "Share the UTR or transaction ID",
+        "hinglish": "UTR ya transaction ID bhejiye",
+        "hi": "UTR या ट्रांज़ैक्शन ID भेजिए"
+      },
+      "sub_id_not_found": {
+        "en": "Re-check the number and send it again",
+        "hinglish": "Number dobara check karke bhejiye",
+        "hi": "नंबर दोबारा जाँचकर भेजिए"
+      },
+      "sub_payment_ok": {
+        "en": "Nothing to recover · it's in settlement",
+        "hinglish": "Recover karne ko kuch nahi · settlement mein",
+        "hi": "वापस लाने को कुछ नहीं · सेटलमेंट में"
       }
     },
     "outcomes": {
@@ -1524,24 +1614,24 @@
       "PAYMENT_NOT_FOUND": {
         "type": "faq",
         "status": "info",
-        "title": "t_need_info",
+        "title": "t_need_ref",
+        "subtitle": "sub_ask_ref",
         "amount": false,
-        "actions": [
-          "add_txn_id",
-          "talk_to_specialist"
-        ],
-        "subtitle": "sub_payment_not_found"
+        "quick": [
+          "action:add_txn_id",
+          "send:topic_person"
+        ]
       },
       "REFUND_NOT_FOUND": {
         "type": "faq",
         "status": "info",
-        "title": "t_need_info",
+        "title": "t_need_ref",
+        "subtitle": "sub_ask_ref",
         "amount": false,
-        "actions": [
-          "add_txn_id",
-          "talk_to_specialist"
-        ],
-        "subtitle": "sub_refund_not_found"
+        "quick": [
+          "action:add_txn_id",
+          "send:topic_person"
+        ]
       },
       "FAQ_ANSWER": {
         "type": "faq",
@@ -1614,6 +1704,88 @@
         "title": "t_answer",
         "amount": false,
         "subtitle": null
+      },
+      "SETTLEMENT_NOT_FOUND": {
+        "type": "faq",
+        "status": "info",
+        "title": "t_need_ref",
+        "subtitle": "sub_ask_ref",
+        "amount": false,
+        "quick": [
+          "action:add_txn_id",
+          "send:topic_person"
+        ]
+      },
+      "ID_NOT_FOUND": {
+        "type": "faq",
+        "status": "info",
+        "title": "t_not_found",
+        "subtitle": "sub_id_not_found",
+        "amount": false,
+        "refs": [
+          [
+            "l_ref",
+            "ref"
+          ]
+        ],
+        "quick": [
+          "action:add_txn_id",
+          "send:topic_person"
+        ]
+      },
+      "PAYMENT_ALREADY_OK": {
+        "type": "payment_recovered",
+        "status": "info",
+        "title": "t_payment_ok",
+        "subtitle": "sub_payment_ok",
+        "refs": [
+          [
+            "l_txn",
+            "txn_id"
+          ]
+        ]
+      },
+      "SMALL_TALK_GREET": {
+        "type": "chips",
+        "status": "info",
+        "title": "t_answer",
+        "amount": false,
+        "quick": [
+          "send:topic_payment",
+          "send:topic_settlement",
+          "send:topic_refund",
+          "send:topic_soundbox",
+          "send:topic_kyc",
+          "send:topic_person"
+        ]
+      },
+      "SMALL_TALK_THANKS": {
+        "type": "chips",
+        "status": "info",
+        "title": "t_answer",
+        "amount": false,
+        "quick": [
+          "send:topic_payment",
+          "send:topic_settlement",
+          "send:topic_refund",
+          "send:topic_soundbox",
+          "send:topic_kyc",
+          "send:topic_person"
+        ]
+      },
+      "CLARIFY": {
+        "type": "chips",
+        "status": "info",
+        "title": "t_answer",
+        "amount": false,
+        "quick": [
+          "send:topic_payment",
+          "send:topic_settlement",
+          "send:topic_refund",
+          "send:topic_soundbox",
+          "send:topic_kyc",
+          "send:topic_person"
+        ]
       }
     }
   }
