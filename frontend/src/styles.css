@@ -433,3 +433,21 @@ body {
 .stage:has(.council.held) .stage-card { background:
   linear-gradient(var(--surface), var(--surface)) padding-box,
   linear-gradient(120deg, var(--hold-mark), var(--info) 60%, var(--sky)) border-box; }
+
+/* ------------------------------------------------------------------ proactive check-in */
+.checkin-row { padding: 8px 10px 0; border-top: 1px solid var(--line); }
+.checkin-btn {
+  width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 12px; padding: 8px 12px;
+  font-weight: 600; font-size: 13px; color: #fff; background: linear-gradient(120deg, var(--ok), var(--sky));
+  box-shadow: 0 6px 16px -8px color-mix(in srgb, var(--ok) 70%, transparent);
+}
+.checkin-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.checkin-btn:not(:disabled):hover { filter: brightness(1.06); }
+.chip.noticed { background: color-mix(in srgb, var(--ok) 14%, var(--surface)); color: var(--ok); font-size: 11px; padding: 0 7px; gap: 4px; }
+.chip.noticed svg { width: 12px; height: 12px; }
+.suggest { border-top: 0; }
+.cell.proactive::after { content: ''; position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--sky); box-shadow: 0 0 0 2px var(--surface); }
+.kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1280px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .kpis { grid-template-columns: minmax(0, 1fr); } }

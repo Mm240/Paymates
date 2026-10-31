@@ -199,3 +199,61 @@ def test_demo_4_council_vetoes_kyc_pending_credit(store):
     assert esc["proposed_action"]["tool"] == "mark_payment_recovered"
     asyncio.run(ops.decide(store, esc["id"], True, "Priya"))                  # a human approval overrides the council
     assert store.transaction("T88340266")["gateway_status"] == "SUCCESS"
+
+
+# ---------------------------------------------------------------- proactive check-in
+def checkin(store, mid):
+    from app import watcher
+    events = []
+
+    async def emit(e):
+        events.append(e)
+
+    return asyncio.run(watcher.checkin(store, mid, emit, pacing=0)), events
+
+
+def test_checkin_m1003_fixes_before_the_merchant_asks(store):
+    out, ev = checkin(store, "M1003")
+    by = {t["subject"]: t for t in out["tickets"]}
+    assert all(t["source"] == "proactive" for t in out["tickets"])
+    # ₹860 failed-but-charged payment recovered without anyone asking
+    assert by["T88340299"]["status"] == "RESOLVED_AI" and by["T88340299"]["recovered_amount"] == 860
+    assert store.transaction("T88340299")["gateway_status"] == "SUCCESS"
+    # KYC-held settlement: guided, not force-paid
+    assert by["S2610302"]["outcome"] == "SETTLEMENT_KYC_HOLD"
+    assert store.settlement("S2610302")["status"] == "ON_HOLD"
+    # Soundbox issue handled
+    assert by["SB-41890"]["intent"] == "SOUNDBOX" and by["SB-41890"]["status"] == "RESOLVED_AI"
+    # Outbound message comes first, in the merchant's language (Hindi)
+    assert by["T88340299"]["reply"].startswith("Anil जी, PayMates")
+    # Watcher is the first step
+    steps = [e for e in ev if e["type"] == "step"]
+    assert steps[0]["agent"] == "watcher"
+
+
+def test_checkin_twice_creates_nothing_new(store):
+    first, _ = checkin(store, "M1003")
+    n_tickets = len(store.tickets(limit=1000))
+    n_esc = len(store.escalations())
+    second, _ = checkin(store, "M1003")
+    assert first["found"] > 0 and second["found"] == 0
+    assert len(store.tickets(limit=1000)) == n_tickets and len(store.escalations()) == n_esc
+    assert second["message"]                                             # "all clear" message instead
+
+
+def test_checkin_big_refund_still_needs_a_human(store):
+    out, _ = checkin(store, "M1002")
+    refund = next(t for t in out["tickets"] if t["subject"] == "R77812")
+    assert refund["status"] == "ESCALATED" and refund["outcome"] == "REFUND_NEEDS_APPROVAL"
+    assert store.refund("R77812")["status"] == "FAILED"
+
+
+def test_checkin_skips_records_already_handled_in_chat(store):
+    run(store, "M1002", "Customer says refund not received.")             # Demo 3 opens an escalation for R77812
+    out, _ = checkin(store, "M1002")
+    assert "R77812" not in {t["subject"] for t in out["tickets"]}
+
+
+def test_proactive_metric_counts_fixes(store):
+    checkin(store, "M1003")
+    assert ops.metrics(store)["proactive_fixed"] >= 2

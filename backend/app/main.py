@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import council, ops
+from . import council, ops, watcher
 from .agents.orchestrator import handle_message
 from .config import FRONTEND_DIST, POLICY, PROVIDERS, mode, provider_available, routing_table
 from .rag import index
@@ -102,6 +102,14 @@ async def chat(body: ChatIn):
     if not store.merchant(body.merchant_id):
         raise HTTPException(404, "merchant not found")
     return sse(lambda emit: handle_message(store, body.merchant_id, body.message.strip(), emit))
+
+
+@app.post("/api/merchants/{mid}/checkin")
+async def checkin(mid: str):
+    """Proactive check-in: same SSE events as /api/chat, one ticket per problem found."""
+    if not store.merchant(mid):
+        raise HTTPException(404, "merchant not found")
+    return sse(lambda emit: watcher.checkin(store, mid, emit))
 
 
 @app.get("/api/tickets")

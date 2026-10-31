@@ -18,12 +18,12 @@ function Ribbon({ series, lastId }) {
     <div className="chart-wrap" onMouseLeave={() => setTip(null)}>
       <div className="ribbon" role="list" aria-label="Every ticket, in order, coloured by outcome">
         {series.map((p) => (
-          <span key={p.i} role="listitem" className={`cell ${p.status} ${p.i === lastId ? 'live' : ''}`}
-            aria-label={`Ticket ${p.i}: ${STATUS[p.status]?.label}, ${INTENT_LABEL[p.intent] || ''}`}
+          <span key={p.i} role="listitem" className={`cell ${p.status} ${p.i === lastId ? 'live' : ''} ${p.source === 'proactive' ? 'proactive' : ''}`}
+            aria-label={`Ticket ${p.i}: ${STATUS[p.status]?.label}, ${INTENT_LABEL[p.intent] || ''}${p.source === 'proactive' ? ', found by PayMates' : ''}`}
             onMouseEnter={(e) => {
               const box = e.currentTarget.parentElement.getBoundingClientRect()
               const r = e.currentTarget.getBoundingClientRect()
-              setTip({ x: r.left - box.left + r.width / 2, y: r.top - box.top, text: `#${p.i} · ${INTENT_LABEL[p.intent] || 'Unclear'} · ${STATUS[p.status]?.short}${p.source === 'simulated' ? ' · simulated' : ''}` })
+              setTip({ x: r.left - box.left + r.width / 2, y: r.top - box.top, text: `#${p.i} · ${INTENT_LABEL[p.intent] || 'Unclear'} · ${STATUS[p.status]?.short}${p.source === 'simulated' ? ' · simulated' : p.source === 'proactive' ? ' · proactive' : ''}` })
             }}>
             {glyph(p.status)}
           </span>
@@ -148,6 +148,12 @@ export function Dashboard({ metrics, tickets, audit, info, onSimulate, simState,
           <span className="how">Sum of payments marked successful after a bank recheck</span>
         </section>
         <section className="panel kpi">
+          <span className="label">Fixed before the merchant asked</span>
+          <span className="val">{m.proactive_fixed || 0}</span>
+          <span className="muted">Problems PayMates found and resolved on its own check-ins</span>
+          <span className="how">Proactive tickets resolved without a human</span>
+        </section>
+        <section className="panel kpi">
           <span className="label">Specialist hours saved</span>
           <span className="val">{m.hours_saved}<small> h</small></span>
           <span className="muted">{m.escalated_open} waiting · {m.resolved_human} resolved with a specialist</span>
@@ -158,7 +164,7 @@ export function Dashboard({ metrics, tickets, audit, info, onSimulate, simState,
       <div className="grid-2">
         <section className="panel">
           <div className="panel-head"><h2>Every ticket, in order</h2><span className="spacer" />
-            <div className="legend">{LEGEND.map(([s, label]) => <span key={s}><i className={`cell ${s}`} style={{ width: 14, height: 14, fontSize: 9, animation: 'none' }}>{glyph(s)}</i>{label}</span>)}</div>
+            <div className="legend">{LEGEND.map(([s, label]) => <span key={s}><i className={`cell ${s}`} style={{ width: 14, height: 14, fontSize: 9, animation: 'none' }}>{glyph(s)}</i>{label}</span>)}<span><i style={{ background: 'var(--sky)', width: 8, height: 8, borderRadius: '50%' }} />Found by PayMates</span></div>
           </div>
           <div className="panel-body" style={{ display: 'grid', gap: 18 }}>
             <Ribbon series={m.series} lastId={lastI} />
@@ -217,7 +223,7 @@ export function Dashboard({ metrics, tickets, audit, info, onSimulate, simState,
                   <tr key={t.id}>
                     <td className="mono" style={{ whiteSpace: 'nowrap' }}>{t.id}</td>
                     <td>{t.merchant_name || t.merchant_id}</td>
-                    <td className="msg" title={t.message}>{t.message}</td>
+                    <td className="msg" title={t.message}>{t.source === 'proactive' && <span className="chip noticed" style={{ marginRight: 6 }}>proactive</span>}{t.message}</td>
                     <td>{INTENT_LABEL[t.intent] || '–'}</td>
                     <td><StatusChip status={t.status} /></td>
                     <td className="num" style={{ whiteSpace: 'nowrap' }}>{t.status === 'RESOLVED_AI' ? fmtMs(t.duration_ms) : '–'}</td>

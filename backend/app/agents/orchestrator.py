@@ -1,6 +1,11 @@
 """Orchestrator: runs one merchant message through the agent team.
 
-    triage -> context -> action (guarded tools) -> [council] -> [escalation] -> responder
+    [watcher] -> triage -> context -> action (guarded tools) -> [council] -> [escalation] -> responder
+
+A ticket can start from the merchant's message, or from the watcher (a
+proactive check-in found a problem in the records). Watcher tickets skip
+model triage, because the record already says what the issue is, and open
+the reply with an outbound "I noticed..." in the merchant's language.
 
 Every step is streamed as an event so the UI can show the agents working
 live. Failures in any model fall back to rules, so a ticket never dies.
@@ -14,6 +19,7 @@ from typing import Awaitable, Callable
 from ..config import POLICY, pacing_seconds
 from ..guardrails import mask_pii
 from ..store import Store, now_ms
+from ..text import render
 from ..tools import ToolRunner
 from . import action as action_agent
 from .context import gather
@@ -40,7 +46,7 @@ class Pacer:
 
 
 async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, source: str = "live",
-                         pacing: float | None = None) -> dict:
+                         pacing: float | None = None, watch: dict | None = None) -> dict:
     merchant = store.merchant(merchant_id)
     if merchant is None:
         raise ValueError(f"unknown merchant {merchant_id}")
@@ -51,19 +57,40 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
     store.insert("tickets", {"id": ticket_id, "merchant_id": merchant_id, "message": text, "lang": "en", "intent": None,
                              "confidence": None, "status": "OPEN", "outcome": None, "summary": None, "reply": None,
                              "created_at": created, "resolved_at": None, "duration_ms": None, "recovered_amount": 0,
-                             "models": {}, "source": source})
-    store.add_message(merchant_id, "merchant", text, ticket_id)
-    store.audit(ticket_id, "merchant", "message", {"text": mask_pii(text)})
-    await emit({"type": "ticket", "ticket": {"id": ticket_id, "merchant_id": merchant_id, "created_at": created, "message": text}})
+                             "models": {}, "source": source, "subject": watch["subject"] if watch else None, "facts": {}})
+    if watch:
+        store.audit(ticket_id, "watcher", "noticed", {"kind": watch["kind"], "subject": watch["subject"], "title": watch["title"]})
+    else:
+        store.add_message(merchant_id, "merchant", text, ticket_id)
+        store.audit(ticket_id, "merchant", "message", {"text": mask_pii(text)})
+    await emit({"type": "ticket", "ticket": {"id": ticket_id, "merchant_id": merchant_id, "created_at": created, "message": text,
+                                             "source": source}})
     models: dict[str, str] = {}
 
     async def step(agent: str, status: str, title: str, **extra):
         await emit({"type": "step", "agent": agent, "status": status, "title": title, **extra})
 
+    # 0. WATCHER (proactive tickets only) -----------------------------------
+    if watch:
+        await step("watcher", "running", "Scanning records")
+        await pace(0.6)
+        models["watcher"] = "watcher: record scan"
+        await step("watcher", "done", watch["title"], model=models["watcher"], ms=0,
+                   data={"kind": watch["kind"], "subject": watch["subject"]})
+    else:
+        await step("watcher", "skipped", "Merchant wrote in first")
+
     # 1. TRIAGE ------------------------------------------------------------
-    await step("triage", "running", "Reading the message")
+    await step("triage", "running", "Reading the message" if not watch else "Classifying what the watcher found")
     t0 = time.perf_counter()
-    tri, models["triage"] = await run_triage(mask_pii(text))
+    if watch:
+        # The record says what the issue is; no model needed. Reply in the merchant's own language.
+        tri = {"intent": watch["intent"], "confidence": 1.0, "entities": watch["entities"],
+               "urgency": "high" if watch["kind"] != "soundbox" else "medium",
+               "language": merchant["lang"], "reasoning": f"Raised by the watcher from {watch['subject']}"}
+        models["triage"] = "watcher: from records"
+    else:
+        tri, models["triage"] = await run_triage(mask_pii(text))
     await pace()
     await step("triage", "done", f"{tri['intent'].replace('_', ' ').title()} · {int(tri['confidence'] * 100)}% sure",
                model=models["triage"], ms=max(0, int((time.perf_counter() - t0 - pace.last) * 1000)), data=tri)
@@ -152,6 +179,9 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
     await pace(0.6)
     await step("responder", "done", f"Reply in {dict(en='English', hi='Hindi', hinglish='Hinglish')[tri['language']]}",
                model=models["responder"], ms=max(0, int((time.perf_counter() - t0 - pace.last) * 1000)), data={"grounded": grounded_ok})
+    if watch:
+        intro = render(watch["intro"], tri["language"], {**base, **watch["facts"]})
+        reply = f"{intro}\n\n{reply}"
     store.add_message(merchant_id, "assistant", reply, ticket_id)
     await emit({"type": "reply", "text": reply, "lang": tri["language"], "ticket_id": ticket_id})
 
@@ -161,7 +191,7 @@ async def handle_message(store: Store, merchant_id: str, text: str, emit: Emit, 
     changes = {"lang": tri["language"], "intent": tri["intent"], "confidence": tri["confidence"], "status": status,
                "outcome": act["outcome"], "summary": act["summary"], "reply": reply, "duration_ms": duration,
                "resolved_at": now_ms() if status == "RESOLVED_AI" else None, "recovered_amount": runner.recovered,
-               "models": models}
+               "models": models, "facts": {k: v for k, v in act["facts"].items() if isinstance(v, (str, int, float))}}
     store.update("tickets", ticket_id, changes)
     store.audit(ticket_id, "orchestrator", "close", {"status": status, "outcome": act["outcome"], "duration_ms": duration})
     ticket = store.ticket(ticket_id)

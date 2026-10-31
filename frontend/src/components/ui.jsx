@@ -5,6 +5,7 @@ const S = (props) => (
 )
 
 export const Icon = {
+  watcher: () => <S><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></S>,
   triage: () => <S><path d="M3 5h18M6 12h12M10 19h4" /></S>,
   context: () => <S><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></S>,
   action: () => <S><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z" /></S>,

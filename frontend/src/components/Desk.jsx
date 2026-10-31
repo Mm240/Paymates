@@ -31,7 +31,7 @@ const LANG_TAG = { hinglish: 'Hinglish', en: 'English', hi: 'हिन्दी'
 const isDeva = (t) => /[ऀ-ॿ]/.test(t || '')
 
 // ====================================================================== phone
-export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, busyLabel, onSend, voice, onVoice, canMic }) {
+export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, busyLabel, onSend, onCheckin, voice, onVoice, canMic }) {
   const [text, setText] = useState('')
   const [listening, setListening] = useState(false)
   const chatRef = useRef(null)
@@ -93,6 +93,7 @@ export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, b
             {messages.map((msg, i) => (
               <div key={i} className={`bubble-wrap ${msg.role === 'merchant' ? 'me' : ''}`}>
                 {msg.role === 'human' && <div className="bubble-meta"><span className="avatar human" style={{ width: 18, height: 18, fontSize: 10, borderRadius: 6 }}>{msg.from?.[0] || 'S'}</span>{msg.from} · Specialist</div>}
+                {msg.proactive && <div className="bubble-meta"><span className="chip noticed"><Icon.watcher />PayMates noticed</span></div>}
                 <div className={`bubble ${msg.role === 'merchant' ? 'me' : msg.role === 'human' ? 'human' : 'bot'}`} lang={isDeva(msg.text) ? 'hi' : undefined}>{msg.text}</div>
                 {msg.role === 'bot' && msg.ticket && (
                   <div className="bubble-meta">
@@ -105,6 +106,11 @@ export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, b
               </div>
             ))}
             {busy && <div className="typing"><i /><i /><i /> {busyLabel || 'PayMates is checking'}</div>}
+          </div>
+          <div className="checkin-row">
+            <button className="checkin-btn" onClick={onCheckin} disabled={busy} title="PayMates scans this merchant's payments, settlements, refunds and Soundbox and fixes what it can">
+              <Icon.watcher />PayMates check-in
+            </button>
           </div>
           <div className="suggest" aria-label="Try a message">
             {(SUGGEST[merchantId] || []).map((s) => (
@@ -131,6 +137,7 @@ export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, b
 
 // ====================================================================== trace
 export const STAGES = [
+  { key: 'watcher', name: 'Watcher', job: 'Finds problems in the records before the merchant asks' },
   { key: 'triage', name: 'Triage', job: 'Understands the message' },
   { key: 'context', name: 'Context', job: 'Pulls account history and help docs' },
   { key: 'action', name: 'Action', job: 'Decides, then acts through tools' },

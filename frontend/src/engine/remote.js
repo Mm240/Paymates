@@ -61,6 +61,10 @@ export const remoteEngine = {
     const last = await stream('/api/chat', { merchant_id: mid, message: text }, onEvent)
     return last && last.ticket
   },
+  async checkin(mid, onEvent) {
+    const last = await stream(`/api/merchants/${mid}/checkin`, {}, onEvent)
+    return last
+  },
   metrics: () => json('/api/metrics'),
   tickets: () => json('/api/tickets'),
   escalations: () => json('/api/escalations'),

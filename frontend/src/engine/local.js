@@ -712,7 +712,7 @@ async function respond(outcome, facts, lang, text) {
 }
 
 // ====================================================================== orchestrator
-export async function handleMessage(mid, text, emit = async () => {}, { source = 'live', pacing = 450 } = {}) {
+export async function handleMessage(mid, text, emit = async () => {}, { source = 'live', pacing = 450, watch = null } = {}) {
   const merchant = S.merchants.get(mid)
   let paced = 0, lastPace = 0
   const pace = async (f = 1) => { lastPace = 0; if (pacing > 0) { paced += pacing * f; lastPace = pacing * f; await sleep(pacing * f) } }
@@ -720,18 +720,36 @@ export async function handleMessage(mid, text, emit = async () => {}, { source =
   const ticketId = nextId('ticket', 'PM-')
   const created = now()
   const ticket = { id: ticketId, merchant_id: mid, message: text, lang: 'en', intent: null, confidence: null, status: 'OPEN', outcome: null,
-    summary: null, reply: null, created_at: created, resolved_at: null, duration_ms: null, recovered_amount: 0, models: {}, source }
+    summary: null, reply: null, created_at: created, resolved_at: null, duration_ms: null, recovered_amount: 0, models: {}, source,
+    subject: watch ? watch.subject : null, facts: {} }
   S.tickets.push(ticket)
-  S.messages.push({ merchant_id: mid, role: 'merchant', text, ts: created, ticket_id: ticketId })
-  audit(ticketId, 'merchant', 'message', { text: maskPii(text) })
-  await emit({ type: 'ticket', ticket: { id: ticketId, merchant_id: mid, created_at: created, message: text } })
+  if (watch) {
+    audit(ticketId, 'watcher', 'noticed', { kind: watch.kind, subject: watch.subject, title: watch.title })
+  } else {
+    S.messages.push({ merchant_id: mid, role: 'merchant', text, ts: created, ticket_id: ticketId })
+    audit(ticketId, 'merchant', 'message', { text: maskPii(text) })
+  }
+  await emit({ type: 'ticket', ticket: { id: ticketId, merchant_id: mid, created_at: created, message: text, source } })
   const models = {}
   const step = (agent, status, title, extra = {}) => emit({ type: 'step', agent, status, title, ...extra })
   const ms = (t) => Math.max(0, Math.round(performance.now() - t - lastPace))
 
-  await step('triage', 'running', 'Reading the message')
+  if (watch) {
+    await step('watcher', 'running', 'Scanning records')
+    await pace(0.6)
+    models.watcher = 'watcher: record scan'
+    await step('watcher', 'done', watch.title, { model: models.watcher, ms: 0, data: { kind: watch.kind, subject: watch.subject } })
+  } else {
+    await step('watcher', 'skipped', 'Merchant wrote in first')
+  }
+
+  await step('triage', 'running', watch ? 'Classifying what the watcher found' : 'Reading the message')
   let t0 = performance.now()
-  const [tri, triModel] = await triage(text)
+  // A watcher ticket already knows its issue from the record; reply in the merchant's own language.
+  const [tri, triModel] = watch
+    ? [{ intent: watch.intent, confidence: 1, entities: watch.entities, urgency: watch.kind === 'soundbox' ? 'medium' : 'high',
+      language: merchant.lang, reasoning: `Raised by the watcher from ${watch.subject}` }, 'watcher: from records']
+    : await triage(text)
   models.triage = triModel
   await pace()
   await step('triage', 'done', `${tri.intent.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())} · ${Math.round(tri.confidence * 100)}% sure`, { model: models.triage, ms: ms(t0), data: tri })
@@ -800,20 +818,71 @@ export async function handleMessage(mid, text, emit = async () => {}, { source =
 
   await step('responder', 'running', 'Writing the reply')
   t0 = performance.now()
-  const [reply, rl, grounded] = await respond(a.outcome, a.facts, tri.language, text)
+  let [reply, rl, grounded] = await respond(a.outcome, a.facts, tri.language, text)
   models.responder = rl
   await pace(0.6)
   await step('responder', 'done', `Reply in ${LANG_LABEL[tri.language]}`, { model: models.responder, ms: ms(t0), data: { grounded } })
+  if (watch) reply = `${render(watch.intro, tri.language, { ...base, ...watch.facts })}\n\n${reply}`
   S.messages.push({ merchant_id: mid, role: 'assistant', text: reply, ts: now(), ticket_id: ticketId })
   await emit({ type: 'reply', text: reply, lang: tri.language, ticket_id: ticketId })
 
   const status = { RESOLVED_AI: 'RESOLVED_AI', ESCALATE: 'ESCALATED', NEEDS_INFO: 'NEEDS_INFO' }[a.status]
   Object.assign(ticket, { lang: tri.language, intent: tri.intent, confidence: tri.confidence, status, outcome: a.outcome, summary: a.summary, reply,
     duration_ms: Math.max(0, Math.round(performance.now() - started - paced)), resolved_at: status === 'RESOLVED_AI' ? now() : null,
-    recovered_amount: run.recovered, models })
+    recovered_amount: run.recovered, models, facts: Object.fromEntries(Object.entries(a.facts).filter(([, v]) => ['string', 'number'].includes(typeof v))) })
   audit(ticketId, 'orchestrator', 'close', { status, outcome: a.outcome, duration_ms: ticket.duration_ms })
   await emit({ type: 'done', ticket: clone(ticket), escalation: escalation && clone(escalation) })
   return clone(ticket)
+}
+
+// ====================================================================== watcher: proactive check-in (mirrors backend/app/watcher.py)
+const DAY = 24 * 60 * 60 * 1000
+function handled(mid, subject) {
+  if (S.tickets.some((t) => t.merchant_id === mid && t.source === 'proactive' && t.subject === subject)) return true
+  if (S.escalations.some((e) => e.merchant_id === mid && e.status === 'OPEN' && JSON.stringify(e.proposed_action || {}).includes(subject))) return true
+  // PayMates already acted on or examined this record in an earlier ticket.
+  const mine = new Set(S.tickets.filter((t) => t.merchant_id === mid).map((t) => t.id))
+  return S.audit.some((x) => mine.has(x.ticket_id) && !['merchant', 'watcher'].includes(x.actor) && JSON.stringify(x.detail || {}).includes(subject))
+}
+export function scan(mid) {
+  const found = []
+  // Smallest first: low-risk fixes land before anything that may need a human.
+  ;[...S.txns.values()].filter((t) => t.merchant_id === mid && t.gateway_status === 'FAILED' && t.bank_debited && !t.bank_checked && !t.recovered)
+    .sort((a, b) => a.amount - b.amount)
+    .forEach((t) => found.push({ kind: 'payment', subject: t.id, intent: 'FAILED_PAYMENT', entities: { txn_id: t.id },
+      title: `Found payment ${t.id} (${inr(t.amount)}) failed but the customer was charged`, intro: 'PROACTIVE_PAYMENT', facts: { txn_id: t.id, amount: inr(t.amount) } }))
+  ;[...S.settlements.values()].filter((x) => x.merchant_id === mid && x.status === 'ON_HOLD').sort((a, b) => a.expected_at - b.expected_at)
+    .forEach((x) => found.push({ kind: 'settlement', subject: x.id, intent: 'SETTLEMENT_DELAY', entities: { settlement_id: x.id },
+      title: `Found settlement ${x.id} (${inr(x.amount)}) on hold: ${x.hold_reason}`, intro: 'PROACTIVE_SETTLEMENT', facts: { settlement_id: x.id, amount: inr(x.amount) } }))
+  ;[...S.refunds.values()].filter((r) => r.merchant_id === mid && r.status === 'FAILED').sort((a, b) => a.initiated_at - b.initiated_at)
+    .forEach((r) => found.push({ kind: 'refund', subject: r.id, intent: 'REFUND_ISSUE', entities: { refund_id: r.id },
+      title: `Found refund ${r.id} (${inr(r.amount)}) bounced back`, intro: 'PROACTIVE_REFUND', facts: { refund_id: r.id, amount: inr(r.amount) } }))
+  const d = IMPL.run_soundbox_diagnostics(mid, {})
+  if (d.issues.length) {
+    found.push({ kind: 'soundbox', subject: d.device_id, intent: 'SOUNDBOX', entities: {},
+      title: `Found Soundbox ${d.device_id} issue: ${d.issues.join(', ')}`, intro: 'PROACTIVE_SOUNDBOX', facts: { device_id: d.device_id } })
+  }
+  return found.filter((f) => (f.kind === 'soundbox'
+    // Device state can stay "wrong" after a fix that needs the merchant's hands; don't nag twice a day.
+    ? !S.tickets.some((t) => t.merchant_id === mid && t.intent === 'SOUNDBOX' && t.source !== 'history' && t.created_at >= now() - DAY)
+    : !handled(mid, f.subject))).map((f) => ({ ...f, text: `[PayMates check-in] ${f.title}` }))
+}
+export async function checkin(mid, emit = async () => {}, { pacing = 450 } = {}) {
+  const m = S.merchants.get(mid)
+  const findings = scan(mid)
+  await emit({ type: 'checkin_start', merchant_id: mid, findings: findings.map(({ kind, subject, title }) => ({ kind, subject, title })) })
+  const tickets = []
+  for (const f of findings) tickets.push(await handleMessage(mid, f.text, emit, { source: 'proactive', pacing, watch: f }))
+  let message = null
+  if (!findings.length) {
+    await emit({ type: 'step', agent: 'watcher', status: 'done', title: 'All clear: nothing needs fixing right now', model: 'watcher: record scan', ms: 0, data: {} })
+    message = render('CHECKIN_ALL_CLEAR', m.lang, { owner_first: m.owner.split(' ')[0] })
+    S.messages.push({ merchant_id: mid, role: 'assistant', text: message, ts: now(), ticket_id: null })
+  }
+  audit(null, 'watcher', 'checkin', { merchant: mid, found: findings.length })
+  const result = { merchant_id: mid, found: findings.length, tickets, message }
+  await emit({ type: 'checkin_done', ...result })
+  return result
 }
 
 // ====================================================================== ops: metrics, human console, simulator
@@ -830,6 +899,7 @@ export function metrics() {
     total: ts.length, resolved_ai: ai, escalated_open: count('ESCALATED'), resolved_human: count('RESOLVED_HUMAN'), human_followup: count('HUMAN_FOLLOWUP'),
     needs_info: count('NEEDS_INFO'), ai_resolution_rate: ts.length ? Math.round((ai / ts.length) * 1000) / 1000 : 0, median_ai_ms: median,
     manual_minutes_baseline: manual, recovered_value: ts.reduce((s, t) => s + (t.recovered_amount || 0), 0), hours_saved: Math.round((ai * manual / 60) * 10) / 10,
+    proactive_fixed: ts.filter((t) => t.source === 'proactive' && t.status === 'RESOLVED_AI').length,
     by_intent: by, series: ts.map((t, i) => ({ i: i + 1, status: t.status, intent: t.intent, source: t.source })), auto_money_limit: LIMIT,
   }
 }
@@ -946,6 +1016,7 @@ export const localEngine = {
     return { merchant: clone(S.merchants.get(mid)) }
   },
   chat(mid, text, onEvent) { return handleMessage(mid, text, async (e) => onEvent(e)) },
+  checkin(mid, onEvent) { return checkin(mid, async (e) => onEvent(e)) },
   async metrics() { return metrics() },
   async tickets() { return S.tickets.filter((t) => t.source !== 'history').sort(byDesc('created_at')).map((t) => ({ ...clone(t), merchant_name: S.merchants.get(t.merchant_id)?.name })) },
   async escalations() { return [...S.escalations].sort((a, b) => (a.status === 'OPEN' ? 0 : 1) - (b.status === 'OPEN' ? 0 : 1) || b.created_at - a.created_at).map(clone) },

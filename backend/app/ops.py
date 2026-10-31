@@ -38,6 +38,7 @@ def metrics(store: Store) -> dict:
         "manual_minutes_baseline": manual,
         "recovered_value": sum(t["recovered_amount"] or 0 for t in ts),
         "hours_saved": round(ai * manual / 60, 1),
+        "proactive_fixed": sum(1 for t in ts if t["source"] == "proactive" and t["status"] == "RESOLVED_AI"),
         "by_intent": by_intent,
         "series": [{"i": i + 1, "status": t["status"], "intent": t["intent"], "source": t["source"]} for i, t in enumerate(ts)],
         "auto_money_limit": POLICY["auto_money_limit"],

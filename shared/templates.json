@@ -130,6 +130,31 @@
       "en": "I've checked everything and the fix is ready: {amount}. Before any money moves, my safety council double-checks it, and they've asked a specialist to take one more look. The specialist has the full details, so you won't need to explain again. You'll get an update here.",
       "hinglish": "Maine sab check kar liya hai aur fix ready hai: {amount}. Paisa bhejne se pehle meri safety council use dobara check karti hai, aur unhone ek specialist se ek baar aur dekhne ko kaha hai. Unke paas poori jaankari hai, aapko dobara batana nahi padega. Update yahin milega.",
       "hi": "मैंने सब जाँच लिया है और समाधान तैयार है: {amount}। पैसा भेजने से पहले मेरी सुरक्षा परिषद इसे दोबारा जाँचती है, और उन्होंने एक विशेषज्ञ से इसे एक बार और देखने को कहा है। उनके पास पूरी जानकारी है, आपको दोबारा बताना नहीं पड़ेगा। अपडेट यहीं मिलेगा।"
+    },
+    "PROACTIVE_PAYMENT": {
+      "en": "Hi {owner_first}, PayMates here. I noticed your {amount} payment {txn_id} showed failed but the customer was charged, so I looked into it.",
+      "hinglish": "{owner_first} ji, PayMates yahan. Maine dekha ki aapka {amount} ka payment {txn_id} fail dikha raha tha par customer ke paise kat gaye the, isliye maine check kiya.",
+      "hi": "{owner_first} जी, PayMates बोल रहा हूँ। मैंने देखा कि आपका {amount} का भुगतान {txn_id} फेल दिख रहा था पर ग्राहक के पैसे कट गए थे, इसलिए मैंने जाँच की।"
+    },
+    "PROACTIVE_SETTLEMENT": {
+      "en": "Hi {owner_first}, PayMates here. I noticed your {amount} settlement {settlement_id} is on hold, so I looked into it.",
+      "hinglish": "{owner_first} ji, PayMates yahan. Maine dekha ki aapka {amount} ka settlement {settlement_id} ruka hua hai, isliye maine check kiya.",
+      "hi": "{owner_first} जी, PayMates बोल रहा हूँ। मैंने देखा कि आपका {amount} का सेटलमेंट {settlement_id} रुका हुआ है, इसलिए मैंने जाँच की।"
+    },
+    "PROACTIVE_REFUND": {
+      "en": "Hi {owner_first}, PayMates here. I noticed your {amount} refund {refund_id} bounced back, so I looked into it.",
+      "hinglish": "{owner_first} ji, PayMates yahan. Maine dekha ki aapka {amount} ka refund {refund_id} wapas aa gaya, isliye maine check kiya.",
+      "hi": "{owner_first} जी, PayMates बोल रहा हूँ। मैंने देखा कि आपका {amount} का रिफंड {refund_id} वापस आ गया, इसलिए मैंने जाँच की।"
+    },
+    "PROACTIVE_SOUNDBOX": {
+      "en": "Hi {owner_first}, PayMates here. I noticed your Soundbox {device_id} may be missing payment announcements, so I checked it.",
+      "hinglish": "{owner_first} ji, PayMates yahan. Maine dekha ki aapka Soundbox {device_id} shayad payment announce nahi kar raha, isliye maine check kiya.",
+      "hi": "{owner_first} जी, PayMates बोल रहा हूँ। मैंने देखा कि आपका साउंडबॉक्स {device_id} शायद भुगतान नहीं बोल रहा, इसलिए मैंने जाँच की।"
+    },
+    "CHECKIN_ALL_CLEAR": {
+      "en": "Hi {owner_first}, PayMates here. I checked your payments, settlements, refunds and Soundbox. Everything looks fine right now.",
+      "hinglish": "{owner_first} ji, PayMates yahan. Maine aapke payments, settlements, refunds aur Soundbox check kiye. Abhi sab theek hai.",
+      "hi": "{owner_first} जी, PayMates बोल रहा हूँ। मैंने आपके भुगतान, सेटलमेंट, रिफंड और साउंडबॉक्स जाँच लिए। अभी सब ठीक है।"
     }
   },
   "action_done": {

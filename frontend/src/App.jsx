@@ -14,6 +14,7 @@ const VIEWS = [
   ['how', 'How it works'],
 ]
 const BUSY_LABEL = {
+  watcher: 'Checking your account',
   triage: 'Understanding your message', context: 'Checking your account', action: 'Working on it',
   council: 'The council is voting', guardrails: 'Running safety checks', escalation: 'Briefing a specialist', responder: 'Writing a reply',
 }
@@ -107,6 +108,46 @@ export default function App() {
 
   const addMsg = (mid, msg) => setConvos((c) => ({ ...c, [mid]: [...(c[mid] || []), msg] }))
 
+  // One handler for chat and check-in streams. A check-in streams several tickets; each 'ticket' event starts a fresh trace.
+  const traceHandler = (mid) => (ev) => {
+    if (ev.type === 'ticket') {
+      setTrace((t) => (ev.ticket.source === 'proactive'
+        ? { merchantId: mid, message: ev.ticket.message, stages: {}, tools: [], reply: null, ticketId: ev.ticket.id, ticket: { ...ev.ticket, status: 'OPEN' } }
+        : { ...t, ticketId: ev.ticket.id, ticket: { ...ev.ticket, status: 'OPEN' } }))
+    } else if (ev.type === 'step') {
+      setTrace((t) => ({ ...t, stages: { ...t.stages, [ev.agent]: ev } }))
+      if (ev.status === 'running') setBusyLabel(BUSY_LABEL[ev.agent] || 'Working')
+    } else if (ev.type === 'tool') setTrace((t) => ({ ...t, tools: [...t.tools, ev] }))
+    else if (ev.type === 'reply') setTrace((t) => ({ ...t, reply: ev.text }))
+    else if (ev.type === 'done') {
+      setTrace((t) => ({ ...t, ticket: ev.ticket }))
+      addMsg(mid, { role: 'bot', text: ev.ticket.reply, ticket: ev.ticket, proactive: ev.ticket.source === 'proactive' })
+      speak(ev.ticket.reply, ev.ticket.lang)
+    } else if (ev.type === 'checkin_done' && ev.message) {
+      addMsg(mid, { role: 'bot', text: ev.message, proactive: true })
+      speak(ev.message)
+    }
+  }
+
+  const checkin = async (mid) => {
+    const e = engineRef.current
+    if (!e || busy) return
+    if (view !== 'desk') go('desk')
+    setBusy(true)
+    setBusyLabel('PayMates is checking your account')
+    setTrace({ merchantId: mid, message: 'PayMates check-in: scanning payments, settlements, refunds and Soundbox', stages: {}, tools: [], reply: null, ticket: null })
+    try {
+      const out = await e.checkin(mid, traceHandler(mid))
+      const n = out?.found ?? 0
+      say(n ? `Check-in found and handled ${n} issue${n === 1 ? '' : 's'}` : 'Check-in: all clear')
+    } catch (err) {
+      say(`Check-in failed: ${err.message}`)
+    } finally {
+      setBusy(false)
+      refresh()
+    }
+  }
+
   const send = async (mid, text) => {
     const e = engineRef.current
     if (!e || busy) return
@@ -116,19 +157,7 @@ export default function App() {
     setBusy(true)
     setBusyLabel('PayMates is checking')
     setTrace({ merchantId: mid, message: text, stages: {}, tools: [], reply: null, ticket: null })
-    const onEvent = (ev) => {
-      if (ev.type === 'ticket') setTrace((t) => ({ ...t, ticketId: ev.ticket.id, ticket: { ...ev.ticket, status: 'OPEN' } }))
-      else if (ev.type === 'step') {
-        setTrace((t) => ({ ...t, stages: { ...t.stages, [ev.agent]: ev } }))
-        if (ev.status === 'running') setBusyLabel(BUSY_LABEL[ev.agent] || 'Working')
-      } else if (ev.type === 'tool') setTrace((t) => ({ ...t, tools: [...t.tools, ev] }))
-      else if (ev.type === 'reply') setTrace((t) => ({ ...t, reply: ev.text }))
-      else if (ev.type === 'done') {
-        setTrace((t) => ({ ...t, ticket: ev.ticket }))
-        addMsg(mid, { role: 'bot', text: ev.ticket.reply, ticket: ev.ticket })
-        speak(ev.ticket.reply, ev.ticket.lang)
-      }
-    }
+    const onEvent = traceHandler(mid)
     try {
       await e.chat(mid, text, onEvent)
     } catch (err) {
@@ -229,7 +258,7 @@ export default function App() {
             <MerchantPhone
               merchants={merchants} merchantId={merchantId} onPick={setMerchantId}
               messages={convos[merchantId] || []} busy={busy} busyLabel={busyLabel}
-              onSend={(t) => send(merchantId, t)} voice={voice} onVoice={() => setVoice((v) => !v)}
+              onSend={(t) => send(merchantId, t)} onCheckin={() => checkin(merchantId)} voice={voice} onVoice={() => setVoice((v) => !v)}
               canMic={!__ARTIFACT__ && typeof window !== 'undefined' && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)}
             />
             <AgentTrace trace={trace} merchants={merchants} onTry={send} live={live} />
