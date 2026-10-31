@@ -5,6 +5,7 @@ import random
 import statistics
 from typing import Awaitable, Callable, Optional
 
+from . import council
 from .config import LEXICON, POLICY, TEMPLATES
 from .store import Store, now_ms
 from .text import inr, render
@@ -90,6 +91,11 @@ async def decide(store: Store, esc_id: str, approve: bool, specialist: str, note
         store.update("escalations", esc_id, {"status": "REJECTED", "decided_at": now_ms(), "decided_by": specialist, "note": note})
         store.update("tickets", ticket["id"], {"status": "HUMAN_FOLLOWUP"})
     store.audit(ticket["id"], f"human:{specialist}", "approve" if approve else "reject", {"escalation": esc_id, "note": note})
+    # Remember the call so the next similar case shows it in its briefing.
+    store.insert("decisions", {"id": store.next_id("dec", "DEC-"), "esc_id": esc_id, "merchant_id": mid, "intent": ticket["intent"],
+                               "amount": council.amount_of(store, proposed["tool"], proposed["args"]) if proposed else 0,
+                               "tool": proposed["tool"] if proposed else None, "decision": "APPROVED" if approve else "DECLINED",
+                               "specialist": specialist, "note": note, "decided_at": now_ms()})
     store.add_message(mid, "assistant", text, ticket["id"])
     return {"escalation": store.escalation(esc_id), "ticket": store.ticket(ticket["id"]),
             "followup": {"merchant_id": mid, "ticket_id": ticket["id"], "text": text, "from": specialist}}

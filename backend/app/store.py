@@ -54,6 +54,10 @@ CREATE TABLE escalations (
 CREATE TABLE audit (
   seq INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER, ticket_id TEXT, actor TEXT, action TEXT, detail TEXT
 );
+CREATE TABLE decisions (
+  id TEXT PRIMARY KEY, esc_id TEXT, merchant_id TEXT, intent TEXT, amount INTEGER, tool TEXT,
+  decision TEXT, specialist TEXT, note TEXT, decided_at INTEGER
+);
 CREATE TABLE settings (
   key TEXT PRIMARY KEY, value TEXT
 );
@@ -80,7 +84,7 @@ class Store:
             self.db.row_factory = sqlite3.Row
             cur = self.db.cursor()
             for table in ("merchants", "transactions", "settlements", "refunds", "tickets",
-                          "ops_tickets", "escalations", "audit", "messages", "settings"):
+                          "ops_tickets", "escalations", "audit", "messages", "settings", "decisions"):
                 cur.execute(f"DROP TABLE IF EXISTS {table}")
             cur.executescript(SCHEMA)
             self.counters = {"ticket": 2400, "ops": 5100, "esc": 300, "utr": 880000, "ref": 61000}

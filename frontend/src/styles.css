@@ -495,3 +495,5 @@ body {
 .roi-inputs { align-items: start; }
 .roi-inputs label { align-content: start; }
 .roi-inputs input { height: 38px; }
+.similar { display: flex; gap: 8px; align-items: flex-start; border: 1px dashed color-mix(in srgb, var(--human) 50%, var(--line)); background: var(--human-soft); border-radius: 12px; padding: 10px 12px; font-size: 13.5px; }
+.similar svg { color: var(--human); margin-top: 2px; flex: none; }

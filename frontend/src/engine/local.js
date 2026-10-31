@@ -29,6 +29,7 @@ function freshStore() {
     merchants: new Map(), txns: new Map(), settlements: new Map(), refunds: new Map(),
     tickets: [], ops: [], escalations: [], audit: [], messages: [],
     counters: { ticket: 2400, ops: 5100, esc: 300, utr: 880000, ref: 61000 },
+    decisions: [],
     settings: { autonomy_level: seed.policy.default_autonomy },
   }
   seed.merchants.forEach((m) => st.merchants.set(m.id, clone(m)))
@@ -746,6 +747,20 @@ export function describeCall(c) {
   return `${n}: done`
 }
 
+const VERB = { reinitiate_refund: 're-sending a {amount} refund', mark_payment_recovered: 'crediting a {amount} payment', retry_settlement: 're-sending a {amount} settlement' }
+// The most recent human decision on the same kind of case with an amount within 50%.
+function similarDecision(intent, proposed) {
+  if (!proposed) return null
+  const amount = amountOf(proposed.tool, proposed.args)
+  if (!amount) return null
+  const d = [...S.decisions].sort((a, b) => b.decided_at - a.decided_at)
+    .find((x) => x.intent === intent && x.amount > 0 && Math.abs(amount - x.amount) <= 0.5 * x.amount)
+  if (!d) return null
+  let text = `Similar past decision: ${d.specialist.split(' ')[0]} ${d.decision === 'APPROVED' ? 'approved' : 'declined'} ${fill(VERB[d.tool] || 'a {amount} action', { amount: inr(d.amount) })} (${d.esc_id})`
+  if (d.note) text += `, noting "${d.note}"`
+  return { esc_id: d.esc_id, decision: d.decision, amount: d.amount, text }
+}
+
 async function buildBriefing(merchant, text, tri, act, calls) {
   const p = act.proposed_action
   const risk = []
@@ -766,6 +781,7 @@ async function buildBriefing(merchant, text, tri, act, calls) {
   }[act.outcome] || "Case needs a specialist's judgement"
   const briefing = {
     headline, said: text, intent: tri.intent, confidence: tri.confidence, checks: calls.map(describeCall), proposed: p, risk,
+    similar: similarDecision(tri.intent, p),
     reason: act.escalation_reason || act.summary,
     merchant: { id: merchant.id, name: merchant.name, owner: merchant.owner, city: merchant.city, plan: merchant.plan, language: tri.language },
     summary: `${merchant.owner} (${merchant.name}, ${merchant.city}) wrote about ${tri.intent.replace(/_/g, ' ').toLowerCase()}. ${act.summary}.`,
@@ -1046,6 +1062,9 @@ export async function decide(escId, approve, specialist, note = '') {
     ticket.status = 'HUMAN_FOLLOWUP'
   }
   audit(ticket.id, `human:${specialist}`, approve ? 'approve' : 'reject', { escalation: escId, note })
+  // Remember the call so the next similar case shows it in its briefing.
+  S.decisions.push({ id: nextId('dec', 'DEC-'), esc_id: escId, merchant_id: esc.merchant_id, intent: ticket.intent, amount: p ? amountOf(p.tool, p.args) : 0,
+    tool: p ? p.tool : null, decision: approve ? 'APPROVED' : 'DECLINED', specialist, note, decided_at: now() })
   S.messages.push({ merchant_id: esc.merchant_id, role: 'assistant', text, ts: now(), ticket_id: ticket.id })
   return { escalation: clone(esc), ticket: clone(ticket), followup: { merchant_id: esc.merchant_id, ticket_id: ticket.id, text, from: specialist }, metrics: metrics() }
 }

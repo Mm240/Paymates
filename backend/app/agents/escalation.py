@@ -7,7 +7,9 @@ summary on top; the facts are never generated.
 from __future__ import annotations
 
 import json
+from typing import Optional
 
+from .. import council
 from ..config import POLICY, model_for
 from ..llm import chat
 from ..text import inr
@@ -74,6 +76,28 @@ def risk_flags(tri: dict, act: dict, store, merchant_id: str) -> list[str]:
     return flags
 
 
+VERB = {"reinitiate_refund": "re-sending a {amount} refund", "mark_payment_recovered": "crediting a {amount} payment",
+        "retry_settlement": "re-sending a {amount} settlement"}
+
+
+def similar_decision(store, intent: str, proposed: Optional[dict]) -> Optional[dict]:
+    """The most recent human decision on the same kind of case with an amount within 50%."""
+    if not proposed:
+        return None
+    amount = council.amount_of(store, proposed["tool"], proposed["args"])
+    if not amount:
+        return None
+    for d in store.all("SELECT * FROM decisions WHERE intent = ? AND amount > 0 ORDER BY decided_at DESC", (intent,)):
+        if abs(amount - d["amount"]) <= 0.5 * d["amount"]:
+            who = d["specialist"].split()[0]
+            what = VERB.get(d["tool"], "a {amount} action").format(amount=inr(d["amount"]))
+            text = f"Similar past decision: {who} {'approved' if d['decision'] == 'APPROVED' else 'declined'} {what} ({d['esc_id']})"
+            if d["note"]:
+                text += f', noting "{d["note"]}"'
+            return {"esc_id": d["esc_id"], "decision": d["decision"], "amount": d["amount"], "text": text}
+    return None
+
+
 async def build_briefing(store, merchant: dict, ticket_id: str, text: str, tri: dict, act: dict, calls: list[dict]) -> tuple[dict, str]:
     checks = [describe_call(c) for c in calls]
     p = act.get("proposed_action")
@@ -94,6 +118,7 @@ async def build_briefing(store, merchant: dict, ticket_id: str, text: str, tri: 
         "checks": checks,
         "proposed": p,
         "risk": risk_flags(tri, act, store, merchant["id"]),
+        "similar": similar_decision(store, tri["intent"], p),
         "reason": act.get("escalation_reason") or act.get("summary"),
         "summary": f"{merchant['owner']} ({merchant['name']}, {merchant['city']}) wrote about {tri['intent'].replace('_', ' ').lower()}. "
                    f"{act.get('summary', '')}.",

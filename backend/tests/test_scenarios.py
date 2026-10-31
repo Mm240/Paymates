@@ -10,7 +10,7 @@ from app import ops  # noqa: E402
 from app.agents import orchestrator  # noqa: E402
 from app.config import ModelSpec  # noqa: E402
 from app.guardrails import check, mask_pii  # noqa: E402
-from app.store import Store  # noqa: E402
+from app.store import Store, now_ms  # noqa: E402
 from app.text import detect_language, inr  # noqa: E402
 
 
@@ -373,3 +373,27 @@ def test_rules_triage_accuracy_at_least_85_percent():
     assert out["models"] == {"rules-engine": 45}          # offline in tests: the rules engine answered every one
     assert out["accuracy"] >= 0.85, out["failures"]
     assert all(b["accuracy"] >= 0.8 for b in out["by_language"].values())
+
+
+# ---------------------------------------------------------------- learns from humans
+def test_briefing_recalls_a_similar_past_decision(store):
+    run(store, "M1002", "Customer says refund not received.")                # Demo 3: ₹7,800 refund held
+    first = store.escalations()[0]
+    assert first["briefing"]["similar"] is None                              # nothing to learn from yet
+    asyncio.run(ops.decide(store, first["id"], True, "Priya (Support)"))
+    store.insert("refunds", {"id": "R77899", "merchant_id": "M1002", "txn_id": None, "amount": 6500, "status": "FAILED",
+                             "reason": "BANK_REJECTED_TECHNICAL", "initiated_at": now_ms(), "arn": None, "eta_at": None})
+    run(store, "M1002", "Customer says refund not received.")                # a similar ₹6,500 refund
+    nxt = next(e for e in store.escalations() if e["status"] == "OPEN")
+    sim = nxt["briefing"]["similar"]
+    assert sim["text"] == f"Similar past decision: Priya approved re-sending a ₹7,800 refund ({first['id']})"
+
+
+def test_dissimilar_amount_is_not_recalled(store):
+    run(store, "M1002", "Customer says refund not received.")
+    asyncio.run(ops.decide(store, store.escalations()[0]["id"], False, "Priya (Support)", "Customer used a closed card"))
+    store.insert("refunds", {"id": "R77900", "merchant_id": "M1002", "txn_id": None, "amount": 25000, "status": "FAILED",
+                             "reason": "BANK_REJECTED_TECHNICAL", "initiated_at": now_ms(), "arn": None, "eta_at": None})
+    run(store, "M1002", "Customer says refund not received.")                # ₹25,000 is not within 50% of ₹7,800
+    nxt = next(e for e in store.escalations() if e["status"] == "OPEN")
+    assert nxt["briefing"]["similar"] is None

@@ -98,6 +98,9 @@ export function HumanConsole({ escalations, onDecide, busyId, policy, onPolicy }
                     </ul>
                   </div>
                 )}
+                {b.similar && (
+                  <div className="similar"><Icon.watcher /><span>{b.similar.text}</span></div>
+                )}
                 {b.risk?.length > 0 && (
                   <div>
                     <div className="eyebrow" style={{ marginBottom: 6 }}>Why a human</div>
