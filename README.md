@@ -36,10 +36,10 @@ cd backend && uvicorn app.main:app --port 8000
 
 | View | What it shows |
 |---|---|
-| **Live desk** | Left: the merchant's phone chat (English, हिन्दी, Hinglish), with optional Soundbox-style voice replies. Centre: the **agent trace**, where each agent lights up live with the model it used, every tool call, the guardrail verdict, and timings. Right: the ticket outcome and today's scoreboard. |
-| **Ops dashboard** | The four outcome metrics from the pitch, a ribbon of every ticket coloured by outcome, the cumulative AI-resolution line, results by issue type, a traffic simulator, the model routing table, recent tickets and the audit log. |
+| **Live desk** | Left: the merchant's phone chat (English, हिन्दी, Hinglish), with optional Soundbox-style voice replies and a **PayMates check-in** button that finds and fixes problems before the merchant asks. Centre: the **agent trace**, where each agent lights up live with the model it used, every tool call, the guardrail verdict, and timings. Right: the ticket outcome and today's scoreboard. |
+| **Ops dashboard** | The outcome metrics (including **Fixed before the merchant asked**), a ribbon of every ticket coloured by outcome, the cumulative AI-resolution line, results by issue type, a traffic simulator, the model routing table, recent tickets and the audit log. |
 | **Human console** | Escalated cases with a full briefing: what the merchant said, what PayMates already checked, why a human is needed, and the exact action proposed. **Approve and run** executes it and messages the merchant. |
-| **How it works** | Architecture, model routing, guardrails, tech stack. |
+| **How it works** | Architecture (including the proactive Watcher), model routing, guardrails, tech stack. |
 
 | Human console | Ops dashboard |
 |---|---|
@@ -51,7 +51,7 @@ cd backend && uvicorn app.main:app --port 8000
 
 > Before you start: open the app, go to **Ops dashboard → Reset demo**, then return to **Live desk**. Turn on the speaker icon in the phone if the room has sound.
 
-1. **Hook (15s).** "Meet Raju, a kirana owner in Lucknow. It's 9 PM, his shop is full, and money is stuck. Watch what happens when he messages PayMates."
+1. **Hook (15s).** "Paytm said it best: a chatbot answers questions, a teammate closes the loop. Meet Raju, a kirana owner in Lucknow. It's 9 PM, his shop is full, and money is stuck. Watch what happens when he messages PayMates."
 
 2. **Demo 1: Failed payment (40s).** Raju's phone → tap **Demo 1** ("Customer's payment failed but money was deducted").
    Point at the trace: *Triage* reads it, *Context* pulls his failed payments, *Action* **rechecks with the bank**, the bank confirms late success, and PayMates **credits ₹1,250 back**. The *Guardrails* line shows why it was allowed: under ₹5,000 and bank-confirmed.
@@ -65,11 +65,16 @@ cd backend && uvicorn app.main:app --port 8000
    Click **Open human console**: everything is pre-checked. Click **Approve and run**. Go back to the Live desk and show Meena's chat: the specialist's update is already there.
    Say: "Autonomy with guardrails is what makes a teammate safe to hire."
 
-5. **Demo 4: The Model Council (40s).** Switch to **Gupta Medicals** → **Demo 4** (Hindi: "ग्राहक के पैसे कट गए पर पेमेंट फेल दिखा रहा है").
-   The bank confirms ₹3,400. That's *under* the ₹5,000 limit, so the guardrail allows it. But the **Council** stage lights up: the ledger and replay auditors approve, and the **velocity auditor holds it** because KYC is pending (₹2,000/day cap). The merchant gets an honest reply in Hindi, and a specialist gets the briefing.
-   Say: "Guardrails ask 'is this allowed?' The council asks 'is this safe right now?' No single model can move money."
+5. **PayMates check-in: fixes it before Anil asks (60s).** Switch to **Gupta Medicals** and click **PayMates check-in** on the phone. Anil hasn't typed anything.
+   The **Watcher** step lights up first, then each problem runs through the same agents and guardrails, and each message opens with "मैंने देखा कि…" ("I noticed…") in Hindi, with a **PayMates noticed** badge:
+   - **₹860** payment failed but the customer was charged → bank recheck → **recovered**.
+   - **₹3,400** payment, same story, but the **Model Council holds it**: KYC is pending, so the autonomous cap is ₹2,000 a day. It goes to the Human console with every reviewer's reason.
+   - **₹9,415** settlement held for KYC → guides Anil on the missing documents and opens a fast-track ticket. No money is forced through.
+   - **Soundbox** on mute with a weak signal → PayMates moves it to the backup network remotely, and asks Anil to press **+** three times (volume is a physical button; it never pretends otherwise).
+   Click **PayMates check-in** again: "all clear", and nothing is fixed twice.
+   Say: "Guardrails ask 'is this allowed?' The council asks 'is this safe right now?' And the best support ticket is the one the merchant never had to raise."
 
-6. **Scale (30s).** **Ops dashboard → Run 25 tickets.** The ribbon and metrics fill live: resolution rate, money recovered, hours saved.
+6. **Scale (30s).** **Ops dashboard → Run 25 tickets.** The ribbon and metrics fill live: resolution rate, money recovered, hours saved, and **Fixed before the merchant asked** (proactive tickets have a blue dot in the ribbon).
    Say: "Same agents, same guardrails, six simulated merchants, three languages."
 
 7. **Close (15s).** "Support that feels like a teammate, not a ticket number. Let's get Raju home on time."
@@ -116,11 +121,12 @@ A juror that times out **abstains**, so a flaky provider never stalls a ticket. 
 ## How it works
 
 ```
-Merchant chat (EN / हिन्दी / Hinglish)
-        │  every message becomes a ticket
-        ▼
+Merchant chat (EN / हिन्दी / Hinglish)      Watcher (PayMates check-in)
+        │  every message becomes a ticket      │  every problem found in the records becomes a ticket
+        └──────────────────┬───────────────────┘
+                           ▼
 ┌──────────────── Orchestrator (streams every step over SSE) ────────────────┐
-│ Triage ─► Context ─► Action (tools) ─► [Council] ─► [Escalation] ─► Reply │
+│ [Watcher] ─► Triage ─► Context ─► Action ─► [Council] ─► [Escalation] ─► Reply │
 └──────────────────────────────┬─────────────────────────────────────────────┘
                                │  every tool call passes the guardrails first
         ┌──────────────┬───────┴────────┬────────────────┐
@@ -129,7 +135,9 @@ Merchant chat (EN / हिन्दी / Hinglish)
                       RAG)            past tickets)
 ```
 
-**Tools the agent can call:** `list_transactions`, `get_transaction`, `recheck_payment_status`, `mark_payment_recovered`, `list_settlements`, `retry_settlement`, `list_refunds`, `get_refund`, `reinitiate_refund`, `get_kyc_status`, `run_soundbox_diagnostics`, `update_soundbox_settings`, `raise_ticket`, `search_help_center`, `escalate_to_human`.
+**Tools the agent can call:** `list_transactions`, `get_transaction`, `recheck_payment_status`, `mark_payment_recovered`, `list_settlements`, `retry_settlement`, `list_refunds`, `get_refund`, `reinitiate_refund`, `get_kyc_status`, `run_soundbox_diagnostics`, `reconnect_device`, `resend_missed_announcements`, `set_announcement_language`, `play_test_announcement`, `raise_ticket`, `search_help_center`, `escalate_to_human`.
+
+**Proactive Watcher:** the **PayMates check-in** scans one merchant's records for failed-but-charged payments, held settlements, bounced refunds and Soundbox issues. Each finding runs through the same orchestrator, tools, guardrails and council as a chat message (ticket source `proactive`), and the reply opens with an outbound "I noticed…" in the merchant's language. It is idempotent: records that already have an open escalation, or that PayMates already worked on, are skipped. API: `POST /api/merchants/{id}/checkin` (same SSE events as `/api/chat`).
 
 **Guardrails (enforced in code, not in the prompt):**
 - **Confidence:** below 60% triage confidence → escalate instead of guessing.
@@ -179,6 +187,7 @@ paymates/
 │   │   ├── tools.py          mock Paytm merchant APIs + ToolRunner
 │   │   ├── guardrails.py     policy checks + PII masking
 │   │   ├── council.py        Model Council: auditors + cross-provider jurors
+│   │   ├── watcher.py        proactive check-in: finds problems before the merchant asks
 │   │   ├── rag.py            help-center vector search
 │   │   ├── store.py          SQLite store
 │   │   └── ops.py            metrics, human console, simulator
@@ -194,7 +203,7 @@ Rebuild the web app after UI changes: `cd frontend && npm install && npm run bui
 
 ## Questions judges are likely to ask
 
-**"Is this just a chatbot?"** No. Open the trace: it calls tools that change state (credits a payment, re-sends a settlement, reconfigures a Soundbox, opens a ticket). The dashboard measures outcomes, not messages.
+**"Is this just a chatbot?"** No. Open the trace: it calls tools that change state (credits a payment, re-sends a settlement, reconnects a Soundbox, opens a ticket), and the check-in finds problems before the merchant even asks. The dashboard measures outcomes, not messages.
 
 **"What stops it from moving money it shouldn't?"** Guardrails run in code before every tool call, whatever the model says. When the model tried to re-send ₹7,800, the guardrail held it and created the approval request. Show the audit log.
 
@@ -207,6 +216,14 @@ Rebuild the web app after UI changes: `cd frontend && npm install && npm run bui
 **"How does it work with real Paytm systems?"** The tools have the same shape as merchant-support APIs (transactions, settlements, refunds, KYC, device management). In production they would call Paytm's internal services instead of the demo database.
 
 **"Are these numbers real?"** No, and say so: all data is simulated. The point is the method. The same four metrics, computed the same way, can be rerun on real tickets. The 18-minute manual baseline is an assumption, labelled as one in the app.
+
+**"What's the business case?"** Lower support cost per ticket (most tickets close without a human), money recovered for merchants (failed-but-charged payments credited back the same day), and better retention of Soundbox subscription merchants, because problems get fixed before they turn into complaints. The ROI numbers in the app are example assumptions; plug in real ones.
+
+**"How would you roll this out?"** Phase 1: read-only checks and answers (status, explanations, guidance). Phase 2: low-risk actions under ₹5,000 with guardrails and the council. Phase 3: wider actions with human approval and a full audit trail. Each phase is a config change, not a rewrite.
+
+**"How does it integrate with Paytm?"** Through the same tool interface. Swap the mock tools for Paytm's internal APIs (transactions, settlements, refunds, KYC, device management); the agents, guardrails and council don't change.
+
+**"Can it really fix a Soundbox remotely?"** Only what a connected device allows: status and diagnostics, reconnect (and move to a backup network), re-announce missed payments, change the announcement language, play a test. Physical things like the volume button get guided steps ("press + three times"); hardware faults or long outages get a technician.
 
 **"Hindi support?"** Language is detected by script and Hinglish markers. Replies come back in the same language, and voice replies use Indian English or Hindi voices.
 

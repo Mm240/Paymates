@@ -2,6 +2,7 @@ import React from 'react'
 import { inr } from '../engine/core.js'
 
 const AGENTS = [
+  ['Watcher', 'Scans the merchant’s records on a check-in: failed-but-charged payments, held settlements, bounced refunds, Soundbox issues. Each finding becomes a proactive ticket.', 'Code: record scan, idempotent'],
   ['Triage', 'Reads the message in English, Hindi or Hinglish; picks the issue, pulls out IDs and amounts, scores its own confidence.', 'Fast model (Groq Llama · Gemini Flash · GPT mini)'],
   ['Context', 'Pulls the merchant’s live records, past tickets and the most relevant help-center docs before anyone replies.', 'Code: SQL + TF-IDF vector search'],
   ['Action', 'Plans and calls tools in a loop: check, recheck with the bank, retry, re-send, reconnect the Soundbox, raise a ticket.', 'Strongest tool-calling model (Claude Sonnet · GPT-4.1 · Gemini Pro)'],
@@ -36,12 +37,15 @@ export function HowItWorks({ info }) {
       <section className="panel">
         <div className="panel-head"><h2>Architecture</h2></div>
         <div className="panel-body arch">
-          <div className="arch-box"><b>Merchant channel</b><small>Chat in the merchant app (demo: this web app) · voice replies like a Soundbox · English, हिन्दी, Hinglish</small></div>
-          <div className="arch-arrow">↓ every message becomes a ticket</div>
+          <div className="arch-row cols-2">
+            <div className="arch-box"><b>Merchant channel</b><small>Chat in the merchant app (demo: this web app) · voice replies like a Soundbox · English, हिन्दी, Hinglish</small></div>
+            <div className="arch-box council-arch"><b>Proactive Watcher</b><small>PayMates check-in scans payments, settlements, refunds and the Soundbox, and opens a ticket for each problem before the merchant asks</small></div>
+          </div>
+          <div className="arch-arrow">↓ every message, and every problem the Watcher finds, becomes a ticket</div>
           <div className="arch-orch">
             <div className="eyebrow" style={{ color: 'inherit', opacity: 0.8, marginBottom: 8 }}>Agent orchestrator · streams each step live</div>
             <div className="arch-row cols-4">
-              {AGENTS.filter((a) => !['Reply', 'Council'].includes(a[0])).map(([n, d]) => <div key={n} className="arch-box"><b>{n}</b><small>{d}</small></div>)}
+              {AGENTS.filter((a) => !['Reply', 'Council', 'Watcher'].includes(a[0])).map(([n, d]) => <div key={n} className="arch-box"><b>{n}</b><small>{d}</small></div>)}
             </div>
           </div>
           <div className="arch-arrow">↓ every tool call passes the guardrails first · every money move also goes to the council</div>
