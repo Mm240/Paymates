@@ -20,7 +20,7 @@ const STACK = [
   ['Web app', 'React 18 + Vite; hand-built SVG charts; Web Speech API for Soundbox-style voice replies'],
   ['Prototype', 'The same agent logic ported to JavaScript so the app runs fully in the browser; Claude can drive it live with page functions as tools'],
   ['Model Council', 'Parallel review with asyncio.gather; models that time out abstain; council verdicts written to the audit log'],
-  ['Quality', 'pytest end-to-end tests for every demo scenario, guardrail, council vote and fallback path (18 tests)'],
+  ['Quality', 'pytest end-to-end tests for every demo scenario, guardrail, council vote and fallback path (46 tests)'],
 ]
 
 const LANG_NAME = { en: 'English', hi: 'हिन्दी (Hindi)', hinglish: 'Hinglish' }
