@@ -28,7 +28,7 @@ pip install -r backend/requirements.txt
 cd backend && uvicorn app.main:app --port 8000
 ```
 
-**Run the tests:** `cd backend && python3 -m pytest -q` (19 end-to-end tests).
+**Run the tests:** `cd backend && python3 -m pytest -q` (40 end-to-end tests).
 
 ---
 
@@ -36,10 +36,10 @@ cd backend && uvicorn app.main:app --port 8000
 
 | View | What it shows |
 |---|---|
-| **Live desk** | Left: the merchant's phone chat (English, हिन्दी, Hinglish), with optional Soundbox-style voice replies and a **PayMates check-in** button that finds and fixes problems before the merchant asks. Centre: the **agent trace**, where each agent lights up live with the model it used, every tool call, the guardrail verdict, and timings. Right: the ticket outcome and today's scoreboard. |
-| **Ops dashboard** | The outcome metrics (including **Fixed before the merchant asked**), a ribbon of every ticket coloured by outcome, the cumulative AI-resolution line, results by issue type, a traffic simulator, the model routing table, recent tickets and the audit log. |
-| **Human console** | Escalated cases with a full briefing: what the merchant said, what PayMates already checked, why a human is needed, and the exact action proposed. **Approve and run** executes it and messages the merchant. |
-| **How it works** | Architecture (including the proactive Watcher), model routing, guardrails, tech stack. |
+| **Live desk** | Left: the merchant's phone chat (English, हिन्दी, Hinglish), with optional Soundbox-style voice replies a **PayMates check-in** button that finds and fixes problems before the merchant asks, and a **₹ Today's hisaab** chip: one message with today's UPI received (already in the bank), card/wallet pending (next working day) and what PayMates fixed, in the merchant's language. Every check-in ends with it. Centre: the **agent trace**, where each agent lights up live with the model it used, every tool call, the guardrail verdict, and timings. Right: the ticket outcome and today's scoreboard. |
+| **Ops dashboard** | The outcome metrics (including **Fixed before the merchant asked**), an **ROI calculator** (editable example assumptions → monthly/yearly savings in lakh/crore and specialist hours freed), a ribbon of every ticket coloured by outcome, the cumulative AI-resolution line, results by issue type, a traffic simulator, the model routing table, recent tickets and the audit log. |
+| **Human console** | The **Autonomy level** dial (Suggest only · Low · Standard), then escalated cases with a full briefing: what the merchant said, what PayMates already checked, why a human is needed, the exact action proposed, and any **similar past decision** a specialist made. **Approve and run** executes it and messages the merchant. |
+| **How it works** | Architecture (including the proactive Watcher), model routing, guardrails, the **Accuracy** test (45 labelled messages in English, Hindi and Hinglish), tech stack. |
 
 | Human console | Ops dashboard |
 |---|---|
@@ -71,13 +71,21 @@ cd backend && uvicorn app.main:app --port 8000
    - **₹3,400** payment, same story, but the **Model Council holds it**: KYC is pending, so the autonomous cap is ₹2,000 a day. It goes to the Human console with every reviewer's reason.
    - **₹9,415** settlement held for KYC → guides Anil on the missing documents and opens a fast-track ticket. No money is forced through.
    - **Soundbox** on mute with a weak signal → PayMates moves it to the backup network remotely, and asks Anil to press **+** three times (volume is a physical button; it never pretends otherwise).
+   The check-in ends with **today's hisaab** in Hindi: UPI received, card money arriving tomorrow, and "₹860 का अटका भुगतान वापस".
    Click **PayMates check-in** again: "all clear", and nothing is fixed twice.
    Say: "Guardrails ask 'is this allowed?' The council asks 'is this safe right now?' And the best support ticket is the one the merchant never had to raise."
 
-6. **Scale (30s).** **Ops dashboard → Run 25 tickets.** The ribbon and metrics fill live: resolution rate, money recovered, hours saved, and **Fixed before the merchant asked** (proactive tickets have a blue dot in the ribbon).
+6. **Ops controls the autonomy (30s).** **Human console → Autonomy level → Suggest only.** Back on Raju's phone, send Demo 1 again after **Reset demo**, or any failed payment: PayMates does all the checks but the ₹1,250 credit now waits in the console ("waiting for approval (autonomy level)"). Switch back to **Standard**. The header pill always shows the level, and every change is in the audit log.
+   Say: "Paytm doesn't have to trust AI with money on day one. Ops turns the dial."
+
+7. **Scale and ROI (40s).** **Ops dashboard → Run 25 tickets.** The ribbon and metrics fill live: resolution rate, money recovered, hours saved, and **Fixed before the merchant asked** (proactive tickets have a blue dot in the ribbon).
+   Scroll to the **ROI calculator**: the resolution rate follows the live dashboard; at 1 lakh tickets a month the example assumptions show savings in lakh/crore. Say clearly that the inputs are example assumptions, not Paytm data.
+   If you approved Demo 3 earlier, open the Human console: simulated refund escalations show **"Similar past decision: Priya approved re-sending a ₹7,800 refund (ESC-301)"**. PayMates learns from its humans.
    Say: "Same agents, same guardrails, six simulated merchants, three languages."
 
-7. **Close (15s).** "Support that feels like a teammate, not a ticket number. Let's get Raju home on time."
+8. **Close (15s).** "Support that feels like a teammate, not a ticket number. Let's get Raju home on time."
+
+**Optional (if asked about accuracy):** **How it works → Run accuracy test.** 45 labelled messages, accuracy per language and which model answered. Be upfront: the rules engine scored 84% before its keywords were tuned on this set, so today's score is an upper bound.
 
 **If something breaks on stage:** the app automatically falls back to the in-browser engine if the backend stops, and every model call falls back to rules if a provider is slow. Set `PAYMATES_MODE=offline` in `.env` for a fully offline, fully predictable run.
 
@@ -137,6 +145,8 @@ Merchant chat (EN / हिन्दी / Hinglish)      Watcher (PayMates check-
 
 **Tools the agent can call:** `list_transactions`, `get_transaction`, `recheck_payment_status`, `mark_payment_recovered`, `list_settlements`, `retry_settlement`, `list_refunds`, `get_refund`, `reinitiate_refund`, `get_kyc_status`, `run_soundbox_diagnostics`, `reconnect_device`, `resend_missed_announcements`, `set_announcement_language`, `play_test_announcement`, `raise_ticket`, `search_help_center`, `escalate_to_human`.
 
+**Autonomy dial:** `GET/POST /api/policy` sets `autonomy_level` (`suggest` · `low` · `standard`, default `standard`). Guardrails read it at call time in both engines; `raise_ticket` and Soundbox actions stay allowed at every level. **Daily hisaab:** `POST /api/merchants/{id}/hisaab`. **Accuracy:** `GET /api/evals` runs `shared/evals.json` through triage. **Learning:** approvals and declines are stored and recalled in similar briefings.
+
 **Proactive Watcher:** the **PayMates check-in** scans one merchant's records for failed-but-charged payments, held settlements, bounced refunds and Soundbox issues. Each finding runs through the same orchestrator, tools, guardrails and council as a chat message (ticket source `proactive`), and the reply opens with an outbound "I noticed…" in the merchant's language. It is idempotent: records that already have an open escalation, or that PayMates already worked on, are skipped. API: `POST /api/merchants/{id}/checkin` (same SSE events as `/api/chat`).
 
 **Guardrails (enforced in code, not in the prompt):**
@@ -164,7 +174,7 @@ Merchant chat (EN / हिन्दी / Hinglish)      Watcher (PayMates check-
 | Web | React 18, Vite, hand-built SVG charts, Web Speech API (voice replies + mic input) |
 | Prototype | The same agent logic in JavaScript (`frontend/src/engine/local.js`) so the app runs fully in the browser; optional Claude-driven mode |
 | Model Council | Parallel review with `asyncio.gather`; code auditors with veto + cross-provider model jurors; abstain on timeout |
-| Tests | pytest end-to-end scenarios, guardrails, council votes, simulation, LLM-failure fallback (19 tests) |
+| Tests | pytest end-to-end scenarios, guardrails, council votes, simulation, LLM-failure fallback (40 tests) |
 
 ---
 
@@ -177,7 +187,8 @@ paymates/
 ├── shared/                   used by BOTH engines, so they behave identically
 │   ├── seed.json             simulated merchants, payments, settlements, refunds, help center
 │   ├── lexicon.json          Hinglish/Hindi keywords, synonyms, simulation messages
-│   └── templates.json        reply templates in English, Hindi, Hinglish
+│   ├── templates.json        reply templates in English, Hindi, Hinglish
+│   └── evals.json            45 labelled messages for the accuracy test
 ├── backend/
 │   ├── app/
 │   │   ├── main.py           FastAPI routes + SSE + serves the web app
@@ -188,6 +199,8 @@ paymates/
 │   │   ├── guardrails.py     policy checks + PII masking
 │   │   ├── council.py        Model Council: auditors + cross-provider jurors
 │   │   ├── watcher.py        proactive check-in: finds problems before the merchant asks
+│   │   ├── hisaab.py         daily hisaab summary
+│   │   ├── evals.py          triage accuracy on shared/evals.json
 │   │   ├── rag.py            help-center vector search
 │   │   ├── store.py          SQLite store
 │   │   └── ops.py            metrics, human console, simulator
@@ -216,6 +229,12 @@ Rebuild the web app after UI changes: `cd frontend && npm install && npm run bui
 **"How does it work with real Paytm systems?"** The tools have the same shape as merchant-support APIs (transactions, settlements, refunds, KYC, device management). In production they would call Paytm's internal services instead of the demo database.
 
 **"Are these numbers real?"** No, and say so: all data is simulated. The point is the method. The same four metrics, computed the same way, can be rerun on real tickets. The 18-minute manual baseline is an assumption, labelled as one in the app.
+
+**"Would Paytm trust AI with money?"** It doesn't have to on day one. Ops controls the autonomy level in the Human console: at **Suggest only**, every money action needs a human, and PayMates still does the checking, explaining and ticketing. **Low** allows up to ₹1,000, **Standard** up to ₹5,000. Every change is audited, and the Model Council plus guardrails apply at every level.
+
+**"How accurate is it?"** How it works → **Run accuracy test**: 45 labelled merchant messages (15 English, 15 Hindi, 15 Hinglish, messy spelling included), with accuracy per language and which model answered. The rules engine scored 84.4% before we tuned its keywords on this set, so its current score is an upper bound; with API keys set, the same test measures the configured model. The next step is a held-out set from real tickets.
+
+**"Does it get better over time?"** Every specialist decision is stored. When a similar case arrives (same issue, amount within 50%), its briefing shows "Similar past decision: Priya approved re-sending a ₹7,800 refund (ESC-301)", so humans stay consistent and the cases worth automating become obvious.
 
 **"What's the business case?"** Lower support cost per ticket (most tickets close without a human), money recovered for merchants (failed-but-charged payments credited back the same day), and better retention of Soundbox subscription merchants, because problems get fixed before they turn into complaints. The ROI numbers in the app are example assumptions; plug in real ones.
 
