@@ -28,7 +28,7 @@ pip install -r backend/requirements.txt
 cd backend && uvicorn app.main:app --port 8000
 ```
 
-**Run the tests:** `cd backend && python3 -m pytest -q` (40 end-to-end tests).
+**Run the tests:** `cd backend && python3 -m pytest -q` (117 tests) and `cd frontend && npm test` (68 tests for the in-browser engine, so both engines are held to the same behaviour).
 
 ---
 
@@ -85,9 +85,50 @@ cd backend && uvicorn app.main:app --port 8000
 
 8. **Close (15s).** "Support that feels like a teammate, not a ticket number. Let's get Raju home on time."
 
+**Optional: it asks instead of guessing (45s).** After **Reset demo**, on Raju's phone type *"Mera ek payment fail hua"*. PayMates doesn't touch anything: it asks for the **UTR (12 digits) or transaction ID** and shows quick chips. Tap **Transaction ID daalein**, send `T88120045`, and it continues the **same ticket** and recovers ₹1,250. Then type *"hi"* (a short greeting, no escalation) and *"Something is off with my account"* (one clarifying question with six topic chips, not an escalation).
+   Say: "A teammate asks when it isn't sure. It doesn't move money on a guess."
+
 **Optional (if asked about accuracy):** **How it works → Run accuracy test.** 45 labelled messages, accuracy per language and which model answered. Be upfront: the rules engine scored 84% before its keywords were tuned on this set, so today's score is an upper bound.
 
 **If something breaks on stage:** the app automatically falls back to the in-browser engine if the backend stops, and every model call falls back to rules if a provider is slow. Set `PAYMATES_MODE=offline` in `.env` for a fully offline, fully predictable run.
+
+---
+
+## Deploy (Render, free plan)
+
+PayMates deploys as **one web service**: FastAPI serves the API and the pre-built web app (`frontend/dist`, committed). The repo has a [Dockerfile](Dockerfile) and a [render.yaml](render.yaml).
+
+1. Push the repo to GitHub (commands below).
+2. On [Render](https://render.com): **New → Web Service** → connect the repo → **Language: Docker** (or **New → Blueprint** to use `render.yaml`). Plan: **Free**.
+3. **Environment** → add these variables in the dashboard (they are never committed):
+
+   | Variable | Value |
+   |---|---|
+   | `GEMINI_API_KEY` | your Gemini key |
+   | `PAYMATES_TRIAGE_MODEL`, `PAYMATES_RESPONDER_MODEL`, `PAYMATES_ESCALATION_MODEL` | `gemini:gemini-3.5-flash-lite` (check your own key's model list; names change) |
+   | `PAYMATES_ACTION_MODEL` | `gemini:gemini-3.5-flash` |
+   | `PAYMATES_MODE` | `auto` (use models when a key exists) or `offline` (rules only: the safest choice for a live demo) |
+   | `PAYMATES_PACING_MS` | `450` (default) |
+   | `PAYMATES_LLM_TIMEOUT` | `15` (default) |
+
+4. **Create Web Service** → **Deploy**. Health check: `/api/health`. Open the service URL; the header pill shows which models are live.
+
+Notes for the finale:
+- The free plan **sleeps after ~15 minutes idle** and takes about a minute to wake up. Open the URL a few minutes before you present.
+- State is in memory (SQLite `:memory:`), so a restart resets the demo data. That is what you want for a demo: **Ops dashboard → Reset demo** does the same.
+- Free Gemini keys are rate-limited and slow. For a predictable demo set `PAYMATES_MODE=offline`.
+- Rebuild the web app before committing UI changes: `cd frontend && npm install && npm run build`.
+
+**Push to GitHub** (this machine has no `gh`; with it, `gh repo create paymates --public --source=. --push` does all of this):
+
+```bash
+# 1. make sure commits carry YOUR name and email, then (optionally) rewrite the existing ones
+git config user.name "Your Name" && git config user.email "you@example.com"
+# 2. create an EMPTY public repo named "paymates" on github.com/new (no README), then:
+git remote add origin https://github.com/<your-username>/paymates.git
+git branch -M main
+git push -u origin main
+```
 
 ---
 
@@ -174,7 +215,7 @@ Merchant chat (EN / हिन्दी / Hinglish)      Watcher (PayMates check-
 | Web | React 18, Vite, hand-built SVG charts, Web Speech API (voice replies + mic input) |
 | Prototype | The same agent logic in JavaScript (`frontend/src/engine/local.js`) so the app runs fully in the browser; optional Claude-driven mode |
 | Model Council | Parallel review with `asyncio.gather`; code auditors with veto + cross-provider model jurors; abstain on timeout |
-| Tests | pytest end-to-end scenarios, guardrails, council votes, simulation, LLM-failure fallback (40 tests) |
+| Tests | pytest end-to-end scenarios, guardrails, council votes, simulation, LLM-failure fallback (117 pytest + 68 browser-engine tests) |
 
 ---
 
@@ -232,7 +273,9 @@ Rebuild the web app after UI changes: `cd frontend && npm install && npm run bui
 
 **"Would Paytm trust AI with money?"** It doesn't have to on day one. Ops controls the autonomy level in the Human console: at **Suggest only**, every money action needs a human, and PayMates still does the checking, explaining and ticketing. **Low** allows up to ₹1,000, **Standard** up to ₹5,000. Every change is audited, and the Model Council plus guardrails apply at every level.
 
-**"How accurate is it?"** How it works → **Run accuracy test**: 45 labelled merchant messages (15 English, 15 Hindi, 15 Hinglish, messy spelling included), with accuracy per language and which model answered. The rules engine scored 84.4% before we tuned its keywords on this set, so its current score is an upper bound; with API keys set, the same test measures the configured model. The next step is a held-out set from real tickets.
+**"Does it guess when it isn't sure?"** No. With no ID and no amount, it acts only if the merchant says money was taken and exactly one payment fits; otherwise it asks for the UTR or transaction ID. It remembers what it asked, so the next message (an ID, a UTR, an amount, or a chip) continues the same ticket in the same language. An ID that isn't on the merchant's account gets "please re-check", not an escalation; unclear messages get one clarifying question, and only a second unclear turn, three failed tries, or a request for a person brings in a human.
+
+**"How accurate is it?"** How it works → **Run accuracy test**: 45 labelled merchant messages (15 English, 15 Hindi, 15 Hinglish, messy spelling included), with accuracy per language and which model answered. The rules engine scored 84.4% on this set before we tuned its keywords, and 72% (18 of 25) on a second set of 25 messy messages with typos before we added their variants; both are now at 100%, which is an upper bound because we tuned on them; with API keys set, the same test measures the configured model. The next step is a held-out set from real tickets.
 
 **"Does it get better over time?"** Every specialist decision is stored. When a similar case arrives (same issue, amount within 50%), its briefing shows "Similar past decision: Priya approved re-sending a ₹7,800 refund (ESC-301)", so humans stay consistent and the cases worth automating become obvious.
 
