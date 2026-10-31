@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from . import council, hisaab, ops, watcher
+from .evals import run_evals
 from .agents.orchestrator import handle_message
 from .config import FRONTEND_DIST, POLICY, PROVIDERS, mode, provider_available, routing_table
 from .rag import index
@@ -144,6 +145,12 @@ def merchant_hisaab(mid: str):
     if not store.merchant(mid):
         raise HTTPException(404, "merchant not found")
     return hisaab.send(store, mid)
+
+
+@app.get("/api/evals")
+async def evals():
+    """Triage accuracy on 45 labelled messages (15 English, 15 Hindi, 15 Hinglish)."""
+    return await run_evals()
 
 
 @app.get("/api/tickets")

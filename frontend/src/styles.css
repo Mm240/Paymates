@@ -470,3 +470,10 @@ body {
 .hisaab-btn { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 8px 10px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
 .hisaab-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .chip.hisaab { background: var(--hold-soft); color: var(--hold); font-size: 11px; padding: 0 7px; }
+
+/* ------------------------------------------------------------------ accuracy panel */
+.acc { display: grid; gap: 12px; }
+.acc-total { display: flex; align-items: baseline; gap: 10px; }
+.acc-total b { font-family: var(--f-display); font-size: 40px; font-weight: 750; letter-spacing: -0.02em; }
+.acc-row { display: grid; grid-template-columns: 130px minmax(0, 1fr) 48px 44px; gap: 10px; align-items: center; font-size: 13px; }
+.acc-miss { margin: 0; padding-left: 18px; font-size: 13px; display: grid; gap: 4px; }

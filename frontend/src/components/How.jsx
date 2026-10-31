@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { inr } from '../engine/core.js'
 
 const AGENTS = [
@@ -23,7 +23,54 @@ const STACK = [
   ['Quality', 'pytest end-to-end tests for every demo scenario, guardrail, council vote and fallback path (18 tests)'],
 ]
 
-export function HowItWorks({ info }) {
+const LANG_NAME = { en: 'English', hi: 'हिन्दी (Hindi)', hinglish: 'Hinglish' }
+
+function Accuracy({ onEvals }) {
+  const [res, setRes] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const go = async () => {
+    setBusy(true); setErr('')
+    try { setRes(await onEvals()) } catch (e) { setErr(e.message) } finally { setBusy(false) }
+  }
+  const pct = (x) => `${Math.round(x * 100)}%`
+  return (
+    <section className="panel">
+      <div className="panel-head">
+        <h2>Accuracy</h2>
+        <span className="muted" style={{ fontSize: 12.5 }}>45 labelled merchant messages: 15 English, 15 Hindi, 15 Hinglish, with messy spelling and short texts</span>
+        <span className="spacer" />
+        <button className="btn small primary" onClick={go} disabled={busy}>{busy ? 'Running…' : 'Run accuracy test'}</button>
+      </div>
+      <div className="panel-body">
+        {err && <div className="chip bad">{err}</div>}
+        {!res && !err && <p className="muted" style={{ margin: 0 }}>Runs every message through triage and checks the intent against its label. Uses the configured triage model when API keys are set, otherwise the rules engine.</p>}
+        {res && (
+          <div className="acc">
+            <div className="acc-total"><b className="num">{pct(res.accuracy)}</b><span className="muted">{res.correct} of {res.total} correct overall</span></div>
+            {Object.entries(res.by_language).map(([lang, b]) => (
+              <div key={lang} className="acc-row">
+                <span>{LANG_NAME[lang] || lang}</span>
+                <div className="progress"><span style={{ width: pct(b.accuracy), background: b.accuracy >= 0.85 ? 'var(--ok)' : 'var(--hold-mark)' }} /></div>
+                <b className="num">{pct(b.accuracy)}</b><span className="muted num">{b.correct}/{b.n}</span>
+              </div>
+            ))}
+            <div className="kv">Answered by {Object.entries(res.models).map(([m, n]) => <span key={m} className="chip model">{m} × {n}</span>)}</div>
+            {res.failures.length > 0 && (
+              <div>
+                <div className="eyebrow" style={{ marginBottom: 6 }}>Misses</div>
+                <ul className="acc-miss">{res.failures.map((f) => <li key={f.id}><span lang={f.lang === 'hi' ? 'hi' : undefined}>“{f.text}”</span> <span className="muted">expected {f.expected}, got {f.got}</span></li>)}</ul>
+              </div>
+            )}
+            <p className="muted" style={{ margin: 0, fontSize: 12.5 }}>Honest note: the rules-engine keywords were tuned on this same set (it scored 84% before tuning), so treat this as an upper bound. A held-out set from real tickets is the next step.</p>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+export function HowItWorks({ info, onEvals }) {
   const limit = info?.policy?.auto_money_limit ?? 5000
   return (
     <div style={{ display: 'grid', gap: 18 }}>
@@ -84,6 +131,8 @@ export function HowItWorks({ info }) {
           </div>
         </section>
       </div>
+
+      <Accuracy onEvals={onEvals} />
 
       <section className="panel">
         <div className="panel-head"><h2>Tech stack</h2></div>

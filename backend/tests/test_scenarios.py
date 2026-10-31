@@ -358,3 +358,18 @@ def test_hisaab_on_request_in_hinglish(store):
     out = hisaab.send(store, "M1001")
     assert out["text"].startswith("Raju ji, aaj ka hisaab")
     assert out["card_pending"] == 650 and "₹1,250 ka atka payment wapas" in out["text"]
+
+
+# ---------------------------------------------------------------- accuracy evals
+def test_eval_set_is_balanced():
+    from app.evals import EVALS
+    assert len(EVALS) == 45
+    assert {lang: sum(1 for x in EVALS if x["lang"] == lang) for lang in ("en", "hi", "hinglish")} == {"en": 15, "hi": 15, "hinglish": 15}
+
+
+def test_rules_triage_accuracy_at_least_85_percent():
+    from app.evals import run_evals
+    out = asyncio.run(run_evals())
+    assert out["models"] == {"rules-engine": 45}          # offline in tests: the rules engine answered every one
+    assert out["accuracy"] >= 0.85, out["failures"]
+    assert all(b["accuracy"] >= 0.8 for b in out["by_language"].values())

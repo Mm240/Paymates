@@ -3,6 +3,7 @@
 // With "Claude live" switched on (hosted prototype only), triage, action and replies are
 // produced by Claude through the page's sample capability, with page functions as tools.
 import seed from '../../../shared/seed.json'
+import evalSet from '../../../shared/evals.json'
 import {
   LEX, TPL, tokens, detectLanguage, keywordHits, extractEntities, inr, phrase, fill, render, ago, maskPii,
   HelpCenterIndex, LANG_LABEL,
@@ -1112,6 +1113,25 @@ export async function simulate(n, onEvent = () => {}, seedVal = Date.now()) {
   return metrics()
 }
 
+// ====================================================================== accuracy evals (mirrors backend/app/evals.py)
+// Uses Claude when live, otherwise the rules triage. The lexicon was tuned on this set: treat the score as an upper bound.
+export async function runEvals() {
+  const t0 = performance.now()
+  const byLang = {}, failures = [], models = {}
+  for (const x of evalSet.items) {
+    const [r, model] = await triage(x.text)
+    models[model] = (models[model] || 0) + 1
+    const hit = r.intent === x.intent
+    const b = (byLang[x.lang] = byLang[x.lang] || { n: 0, correct: 0 })
+    b.n++; b.correct += hit ? 1 : 0
+    if (!hit) failures.push({ id: x.id, lang: x.lang, text: x.text, expected: x.intent, got: r.intent, confidence: r.confidence })
+  }
+  const correct = Object.values(byLang).reduce((a, b) => a + b.correct, 0)
+  Object.values(byLang).forEach((b) => { b.accuracy = Math.round((b.correct / b.n) * 1000) / 1000 })
+  return { total: evalSet.items.length, correct, accuracy: Math.round((correct / evalSet.items.length) * 1000) / 1000, by_language: byLang,
+    failures, models, ms: Math.round(performance.now() - t0) }
+}
+
 // ====================================================================== autonomy dial
 const policyView = () => ({ autonomy_level: S.settings.autonomy_level, levels: Object.entries(LEVELS).map(([id, v]) => ({ id, ...v })) })
 export function setPolicy(level, changedBy = 'Ops') {
@@ -1133,6 +1153,7 @@ export const localEngine = {
     }
   },
   async policy() { return policyView() },
+  evals() { return runEvals() },
   async setPolicy(level, changedBy = 'Ops') { return setPolicy(level, changedBy) },
   setLive(on) { live = Boolean(on) },
   async merchants() { return [...S.merchants.values()].filter((m) => m.id.startsWith('M1')).map(clone) },

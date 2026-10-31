@@ -294,7 +294,7 @@ export default function App() {
           <Dashboard metrics={metrics} tickets={tickets} audit={audit} info={info} onSimulate={simulate} simState={sim} onReset={reset} />
         )}
         {view === 'console' && <HumanConsole escalations={escalations} onDecide={decide} busyId={decidingId} policy={policy} onPolicy={changePolicy} />}
-        {view === 'how' && <HowItWorks info={info} />}
+        {view === 'how' && <HowItWorks info={info} onEvals={() => engineRef.current.evals()} />}
       </main>
       <Toast text={toast} />
     </>

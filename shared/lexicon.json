@@ -3,8 +3,8 @@
   "hinglish_markers": ["nahi","nhi","nahin","kya","hai","hain","kal","aaj","paisa","paise","aaya","aya","mera","meri","mere","kab","kyun","kyu","bhai","ji","karo","kardo","gaya","gayi","gaye","wapas","abhi","batao","bata","hua","hui","raha","rha","rahi","bol","awaaz","awaz","mujhe","chahiye","kaise","kitne","din","kaunse","kaun","ke","ka","ki","liye","mein","se","ho","jaldi","karna","karni","baat","dukaan","kata","kat"],
   "strong_hinglish": ["nahi","nhi","nahin","kya","paisa","paise","aaya","aya","kab","wapas","batao","awaaz","awaz","chahiye","mujhe","kyun","kaise","kitne","gaya","hua","raha","kaunse","jaldi","kata","liye"],
   "intents": {
-    "FAILED_PAYMENT": ["failed","fail","declined","deducted","debited","debit","kat gaya","kat gaye","kata","paisa kat","paise kat","money cut","double charged","stuck payment","फेल","कट गए","कट गया","कटे","डेबिट","असफल"],
-    "SETTLEMENT_DELAY": ["settlement","settle","payout","bank me nahi","bank mein nahi","not credited","utr","सेटलमेंट","बैंक में नहीं","खाते में नहीं"],
+    "FAILED_PAYMENT": ["failed","fail","declined","deducted","debited","debit","kat gaya","kat gaye","kata","paisa kat","paise kat","money cut","double charged","stuck payment","फेल","कट गए","कट गया","कटे","डेबिट","असफल","money is gone","money gone","paise gaye","paisa gaya","atak","atka","अटक","पैसे गए"],
+    "SETTLEMENT_DELAY": ["settlement","settle","payout","bank me nahi","bank mein nahi","not credited","utr","सेटलमेंट","बैंक में नहीं","खाते में नहीं","settlment","setlment","settelment","पेआउट","बैंक खाते","खाते में पैसा","bank mein kab","bank me kab","bank kab"],
     "REFUND_ISSUE": ["refund","wapas nahi mila","money back","रिफंड","वापस नहीं"],
     "SOUNDBOX": ["soundbox","sound box","speaker","awaaz","awaz","announcement","announce","not speaking","bol nahi","bolta nahi","volume","beep","साउंडबॉक्स","आवाज़","आवाज","बोल नहीं","बोलता नहीं"],
     "KYC": ["kyc","document","docs","kagaz","kagzaat","pan","aadhaar","gst","verification","केवाईसी","दस्तावेज","दस्तावेज़","कागज"],

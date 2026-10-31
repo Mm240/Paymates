@@ -1,0 +1,275 @@
+{
+ "_note": "Accuracy test set for triage: 45 realistic merchant messages (15 English, 15 Hindi, 15 Hinglish) with expected intents. Labels are ground truth; improve the lexicon, never the labels.",
+ "items": [
+  {
+   "id": "E01",
+   "lang": "en",
+   "text": "pymnt failed but amt deducted frm cust a/c",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "E02",
+   "lang": "en",
+   "text": "Customer paid 450 but the app shows failed and money was cut from his account",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "E03",
+   "lang": "en",
+   "text": "UPI txn stuck in pending, customer says money is gone",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "E04",
+   "lang": "en",
+   "text": "where is my settlement? didnt receive yesterdays money",
+   "intent": "SETTLEMENT_DELAY"
+  },
+  {
+   "id": "E05",
+   "lang": "en",
+   "text": "payout not credited to bank since 2 days",
+   "intent": "SETTLEMENT_DELAY"
+  },
+  {
+   "id": "E06",
+   "lang": "en",
+   "text": "settlment delayed again pls check",
+   "intent": "SETTLEMENT_DELAY"
+  },
+  {
+   "id": "E07",
+   "lang": "en",
+   "text": "refund to customer not reached, he is asking daily",
+   "intent": "REFUND_ISSUE"
+  },
+  {
+   "id": "E08",
+   "lang": "en",
+   "text": "how long does a refund take to reach the customer",
+   "intent": "REFUND_ISSUE"
+  },
+  {
+   "id": "E09",
+   "lang": "en",
+   "text": "soundbox not speaking when payment comes",
+   "intent": "SOUNDBOX"
+  },
+  {
+   "id": "E10",
+   "lang": "en",
+   "text": "speaker box silent since morning",
+   "intent": "SOUNDBOX"
+  },
+  {
+   "id": "E11",
+   "lang": "en",
+   "text": "which documents are needed to complete kyc",
+   "intent": "KYC"
+  },
+  {
+   "id": "E12",
+   "lang": "en",
+   "text": "my kyc is still pending, what should i upload",
+   "intent": "KYC"
+  },
+  {
+   "id": "E13",
+   "lang": "en",
+   "text": "I want to talk to a real person",
+   "intent": "HUMAN_REQUEST"
+  },
+  {
+   "id": "E14",
+   "lang": "en",
+   "text": "how to download monthly statement",
+   "intent": "GENERAL"
+  },
+  {
+   "id": "E15",
+   "lang": "en",
+   "text": "hello",
+   "intent": "UNKNOWN"
+  },
+  {
+   "id": "E16",
+   "lang": "hi",
+   "text": "ग्राहक का पैसा कट गया पर पेमेंट फेल दिखा रहा है",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "E17",
+   "lang": "hi",
+   "text": "पेमेंट फेल हो गया लेकिन ग्राहक के खाते से पैसे कट गए",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "E18",
+   "lang": "hi",
+   "text": "भुगतान अटका हुआ है, ग्राहक बोल रहा पैसे कट गए",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "E19",
+   "lang": "hi",
+   "text": "कल का सेटलमेंट अभी तक नहीं आया",
+   "intent": "SETTLEMENT_DELAY"
+  },
+  {
+   "id": "E20",
+   "lang": "hi",
+   "text": "मेरे बैंक खाते में पैसा नहीं आया",
+   "intent": "SETTLEMENT_DELAY"
+  },
+  {
+   "id": "E21",
+   "lang": "hi",
+   "text": "पेआउट कब आएगा?",
+   "intent": "SETTLEMENT_DELAY"
+  },
+  {
+   "id": "E22",
+   "lang": "hi",
+   "text": "ग्राहक को रिफंड नहीं मिला",
+   "intent": "REFUND_ISSUE"
+  },
+  {
+   "id": "E23",
+   "lang": "hi",
+   "text": "रिफंड वापस आ गया, क्या करूँ",
+   "intent": "REFUND_ISSUE"
+  },
+  {
+   "id": "E24",
+   "lang": "hi",
+   "text": "साउंडबॉक्स बोल नहीं रहा",
+   "intent": "SOUNDBOX"
+  },
+  {
+   "id": "E25",
+   "lang": "hi",
+   "text": "स्पीकर से आवाज़ नहीं आ रही",
+   "intent": "SOUNDBOX"
+  },
+  {
+   "id": "E26",
+   "lang": "hi",
+   "text": "केवाईसी के लिए कौन से कागज़ चाहिए",
+   "intent": "KYC"
+  },
+  {
+   "id": "E27",
+   "lang": "hi",
+   "text": "मेरा KYC अधूरा है",
+   "intent": "KYC"
+  },
+  {
+   "id": "E28",
+   "lang": "hi",
+   "text": "मुझे किसी इंसान से बात करनी है",
+   "intent": "HUMAN_REQUEST"
+  },
+  {
+   "id": "E29",
+   "lang": "hi",
+   "text": "स्टेटमेंट कैसे डाउनलोड करें",
+   "intent": "GENERAL"
+  },
+  {
+   "id": "E30",
+   "lang": "hi",
+   "text": "नमस्ते",
+   "intent": "UNKNOWN"
+  },
+  {
+   "id": "E31",
+   "lang": "hinglish",
+   "text": "customer ka paisa kat gaya par payment fail dikha raha",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "E32",
+   "lang": "hinglish",
+   "text": "paise kat gaye lekin payment failed bol raha hai",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "E33",
+   "lang": "hinglish",
+   "text": "payment atak gaya bhai, customer ke paise gaye",
+   "intent": "FAILED_PAYMENT"
+  },
+  {
+   "id": "E34",
+   "lang": "hinglish",
+   "text": "kal ka settlement abhi tak nahi aaya bank me",
+   "intent": "SETTLEMENT_DELAY"
+  },
+  {
+   "id": "E35",
+   "lang": "hinglish",
+   "text": "paisa bank mein kab aayega?",
+   "intent": "SETTLEMENT_DELAY"
+  },
+  {
+   "id": "E36",
+   "lang": "hinglish",
+   "text": "settlment ruka hua hai kya",
+   "intent": "SETTLEMENT_DELAY"
+  },
+  {
+   "id": "E37",
+   "lang": "hinglish",
+   "text": "customer ko refund nahi mila abhi tak",
+   "intent": "REFUND_ISSUE"
+  },
+  {
+   "id": "E38",
+   "lang": "hinglish",
+   "text": "refund wapas aa gaya, dobara bhejo",
+   "intent": "REFUND_ISSUE"
+  },
+  {
+   "id": "E39",
+   "lang": "hinglish",
+   "text": "soundbox ki awaaz nahi aa rahi",
+   "intent": "SOUNDBOX"
+  },
+  {
+   "id": "E40",
+   "lang": "hinglish",
+   "text": "speaker bol nahi raha payment pe",
+   "intent": "SOUNDBOX"
+  },
+  {
+   "id": "E41",
+   "lang": "hinglish",
+   "text": "kyc ke liye kaunse documents chahiye",
+   "intent": "KYC"
+  },
+  {
+   "id": "E42",
+   "lang": "hinglish",
+   "text": "kyc pending dikha raha hai kya karu",
+   "intent": "KYC"
+  },
+  {
+   "id": "E43",
+   "lang": "hinglish",
+   "text": "kisi insaan se baat karao",
+   "intent": "HUMAN_REQUEST"
+  },
+  {
+   "id": "E44",
+   "lang": "hinglish",
+   "text": "statement kaise download karu",
+   "intent": "GENERAL"
+  },
+  {
+   "id": "E45",
+   "lang": "hinglish",
+   "text": "hii",
+   "intent": "UNKNOWN"
+  }
+ ]
+}
