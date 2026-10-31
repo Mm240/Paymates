@@ -339,3 +339,22 @@ def test_policy_api_audits_changes():
     assert any(a["action"] == "set_autonomy" and a["actor"] == "ops:Asha (Ops)" for a in live_store.audit_log())
     assert c.post("/api/policy", json={"autonomy_level": "yolo"}).status_code == 400
     live_store.reset()
+
+
+# ---------------------------------------------------------------- daily hisaab
+def test_hisaab_after_checkin(store):
+    out, ev = checkin(store, "M1003")
+    h = out["hisaab"]
+    assert "आज का हिसाब" in h
+    assert "₹740" in h                      # UPI today, already in the bank
+    assert "₹1,180" in h                    # card today, arrives next working day
+    assert "₹860 का अटका भुगतान वापस" in h  # fixed by the check-in, with its amount
+    assert any(e["type"] == "checkin_done" and e["hisaab"] == h for e in ev)
+
+
+def test_hisaab_on_request_in_hinglish(store):
+    from app import hisaab
+    run(store, "M1001", "Customer's payment failed but money was deducted.")
+    out = hisaab.send(store, "M1001")
+    assert out["text"].startswith("Raju ji, aaj ka hisaab")
+    assert out["card_pending"] == 650 and "₹1,250 ka atka payment wapas" in out["text"]

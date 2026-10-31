@@ -125,9 +125,10 @@ export default function App() {
       setTrace((t) => ({ ...t, ticket: ev.ticket }))
       addMsg(mid, { role: 'bot', text: ev.ticket.reply, ticket: ev.ticket, proactive: ev.ticket.source === 'proactive' })
       speak(ev.ticket.reply, ev.ticket.lang)
-    } else if (ev.type === 'checkin_done' && ev.message) {
-      addMsg(mid, { role: 'bot', text: ev.message, proactive: true })
-      speak(ev.message)
+    } else if (ev.type === 'checkin_done') {
+      if (ev.message) addMsg(mid, { role: 'bot', text: ev.message, proactive: true })
+      if (ev.hisaab) addMsg(mid, { role: 'bot', text: ev.hisaab, hisaab: true })
+      speak([ev.message, ev.hisaab].filter(Boolean).join(' '))
     }
   }
 
@@ -148,6 +149,16 @@ export default function App() {
       setBusy(false)
       refresh()
     }
+  }
+
+  const hisaab = async (mid) => {
+    const e = engineRef.current
+    if (!e || busy) return
+    try {
+      const out = await e.hisaab(mid)
+      addMsg(mid, { role: 'bot', text: out.text, hisaab: true })
+      speak(out.text)
+    } catch (err) { say(`Couldn't build today's hisaab: ${err.message}`) }
   }
 
   const send = async (mid, text) => {
@@ -272,7 +283,7 @@ export default function App() {
             <MerchantPhone
               merchants={merchants} merchantId={merchantId} onPick={setMerchantId}
               messages={convos[merchantId] || []} busy={busy} busyLabel={busyLabel}
-              onSend={(t) => send(merchantId, t)} onCheckin={() => checkin(merchantId)} voice={voice} onVoice={() => setVoice((v) => !v)}
+              onSend={(t) => send(merchantId, t)} onCheckin={() => checkin(merchantId)} onHisaab={() => hisaab(merchantId)} voice={voice} onVoice={() => setVoice((v) => !v)}
               canMic={!__ARTIFACT__ && typeof window !== 'undefined' && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)}
             />
             <AgentTrace trace={trace} merchants={merchants} onTry={send} live={live} />

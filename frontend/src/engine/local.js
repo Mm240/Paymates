@@ -966,9 +966,33 @@ export async function checkin(mid, emit = async () => {}, { pacing = 450 } = {})
     S.messages.push({ merchant_id: mid, role: 'assistant', text: message, ts: now(), ticket_id: null })
   }
   audit(null, 'watcher', 'checkin', { merchant: mid, found: findings.length })
-  const result = { merchant_id: mid, found: findings.length, tickets, message }
+  const summary = sendHisaab(mid) // end every check-in with the day's hisaab
+  const result = { merchant_id: mid, found: findings.length, tickets, message, hisaab: summary.text }
   await emit({ type: 'checkin_done', ...result })
   return result
+}
+
+// ====================================================================== daily hisaab (mirrors backend/app/hisaab.py)
+const FIXED = ['PAYMENT_RECOVERED', 'SETTLEMENT_RETRIED', 'REFUND_REINITIATED', 'SOUNDBOX_FIXED', 'SOUNDBOX_LANGUAGE_SET']
+export function computeHisaab(mid) {
+  const m = S.merchants.get(mid)
+  const lang = m.lang
+  const since = now() - DAY
+  const paid = [...S.txns.values()].filter((t) => t.merchant_id === mid && t.gateway_status === 'SUCCESS' && t.created_at >= since)
+  const upi = paid.filter((t) => t.method === 'UPI' && !t.recovered).reduce((a, t) => a + t.amount, 0)
+  const card = paid.filter((t) => ['Card', 'Wallet'].includes(t.method)).reduce((a, t) => a + t.amount, 0)
+  const done = S.tickets.filter((t) => t.merchant_id === mid && t.status === 'RESOLVED_AI' && t.created_at >= since && FIXED.includes(t.outcome))
+    .sort((a, b) => a.created_at - b.created_at)
+  const items = done.map((t) => phrase(`hisaab_${t.outcome}`, lang, { amount: t.facts?.amount || '' }))
+  const fixed = items.length ? phrase('hisaab_fixed', lang, { items: items.join(phrase('list_sep', lang)) }) : phrase('hisaab_none', lang)
+  const text = render('HISAAB', lang, { owner_first: m.owner.split(' ')[0], upi: inr(upi), card: inr(card), fixed })
+  return { merchant_id: mid, upi_received: upi, card_pending: card, fixed: done.map((t) => t.id), text }
+}
+export function sendHisaab(mid) {
+  const out = computeHisaab(mid)
+  S.messages.push({ merchant_id: mid, role: 'assistant', text: out.text, ts: now(), ticket_id: null })
+  audit(null, 'paymates', 'hisaab', { merchant: mid, upi: out.upi_received, card: out.card_pending })
+  return out
 }
 
 // ====================================================================== ops: metrics, human console, simulator
@@ -1117,6 +1141,7 @@ export const localEngine = {
   },
   chat(mid, text, onEvent) { return handleMessage(mid, text, async (e) => onEvent(e)) },
   checkin(mid, onEvent) { return checkin(mid, async (e) => onEvent(e)) },
+  async hisaab(mid) { return sendHisaab(mid) },
   async metrics() { return metrics() },
   async tickets() { return S.tickets.filter((t) => t.source !== 'history').sort(byDesc('created_at')).map((t) => ({ ...clone(t), merchant_name: S.merchants.get(t.merchant_id)?.name })) },
   async escalations() { return [...S.escalations].sort((a, b) => (a.status === 'OPEN' ? 0 : 1) - (b.status === 'OPEN' ? 0 : 1) || b.created_at - a.created_at).map(clone) },

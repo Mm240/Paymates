@@ -170,6 +170,11 @@
       "en": "I've checked everything and the fix is ready: {amount}. Right now my team wants a specialist to approve every money movement like this, so I've sent it to them with the full details. You won't need to explain again; you'll get an update here.",
       "hinglish": "Maine sab check kar liya hai aur fix ready hai: {amount}. Abhi meri team chahti hai ki aise har paise ke kaam ko specialist approve kare, isliye maine unhe poori jaankari bhej di hai. Aapko dobara batana nahi padega, update yahin milega.",
       "hi": "मैंने सब जाँच लिया है और समाधान तैयार है: {amount}। अभी मेरी टीम चाहती है कि ऐसे हर पैसे के काम को विशेषज्ञ मंज़ूरी दें, इसलिए मैंने उन्हें पूरी जानकारी भेज दी है। आपको दोबारा बताना नहीं पड़ेगा, अपडेट यहीं मिलेगा।"
+    },
+    "HISAAB": {
+      "en": "{owner_first}, here's today's hisaab. {upi} came in by UPI and is already in your bank. {card} from card and wallet payments arrives next working day. {fixed}",
+      "hinglish": "{owner_first} ji, aaj ka hisaab: UPI se {upi} aaya, jo bank mein pahunch chuka hai. Card aur wallet ke {card} agle working day aayenge. {fixed}",
+      "hi": "{owner_first} जी, आज का हिसाब: UPI से {upi} आया, जो बैंक में पहुँच चुका है। कार्ड और वॉलेट के {card} अगले कामकाजी दिन आएँगे। {fixed}"
     }
   },
   "action_done": {
@@ -274,6 +279,46 @@
       "en": "been offline for {hours} hours",
       "hinglish": "{hours} ghante se offline",
       "hi": "{hours} घंटे से ऑफ़लाइन"
+    },
+    "hisaab_fixed": {
+      "en": "PayMates fixed today: {items}.",
+      "hinglish": "Aaj PayMates ne theek kiya: {items}.",
+      "hi": "आज PayMates ने ठीक किया: {items}।"
+    },
+    "hisaab_none": {
+      "en": "Nothing needed fixing today.",
+      "hinglish": "Aaj kuch theek karne ki zaroorat nahi padi.",
+      "hi": "आज कुछ ठीक करने की ज़रूरत नहीं पड़ी।"
+    },
+    "hisaab_PAYMENT_RECOVERED": {
+      "en": "{amount} failed payment recovered",
+      "hinglish": "{amount} ka atka payment wapas",
+      "hi": "{amount} का अटका भुगतान वापस"
+    },
+    "hisaab_SETTLEMENT_RETRIED": {
+      "en": "{amount} settlement re-sent",
+      "hinglish": "{amount} ka settlement dobara bheja",
+      "hi": "{amount} का सेटलमेंट दोबारा भेजा"
+    },
+    "hisaab_REFUND_REINITIATED": {
+      "en": "{amount} refund re-sent",
+      "hinglish": "{amount} ka refund dobara bheja",
+      "hi": "{amount} का रिफंड दोबारा भेजा"
+    },
+    "hisaab_SOUNDBOX_FIXED": {
+      "en": "Soundbox fixed",
+      "hinglish": "Soundbox theek kiya",
+      "hi": "साउंडबॉक्स ठीक किया"
+    },
+    "hisaab_SOUNDBOX_LANGUAGE_SET": {
+      "en": "Soundbox language changed",
+      "hinglish": "Soundbox ki bhasha badli",
+      "hi": "साउंडबॉक्स की भाषा बदली"
+    },
+    "list_sep": {
+      "en": ", ",
+      "hinglish": ", ",
+      "hi": ", "
     }
   }
 }

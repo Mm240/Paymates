@@ -32,7 +32,7 @@ const LANG_TAG = { hinglish: 'Hinglish', en: 'English', hi: 'हिन्दी'
 const isDeva = (t) => /[ऀ-ॿ]/.test(t || '')
 
 // ====================================================================== phone
-export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, busyLabel, onSend, onCheckin, voice, onVoice, canMic }) {
+export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, busyLabel, onSend, onCheckin, onHisaab, voice, onVoice, canMic }) {
   const [text, setText] = useState('')
   const [listening, setListening] = useState(false)
   const chatRef = useRef(null)
@@ -95,6 +95,7 @@ export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, b
               <div key={i} className={`bubble-wrap ${msg.role === 'merchant' ? 'me' : ''}`}>
                 {msg.role === 'human' && <div className="bubble-meta"><span className="avatar human" style={{ width: 18, height: 18, fontSize: 10, borderRadius: 6 }}>{msg.from?.[0] || 'S'}</span>{msg.from} · Specialist</div>}
                 {msg.proactive && <div className="bubble-meta"><span className="chip noticed"><Icon.watcher />PayMates noticed</span></div>}
+                {msg.hisaab && <div className="bubble-meta"><span className="chip hisaab">₹ Today's hisaab</span></div>}
                 <div className={`bubble ${msg.role === 'merchant' ? 'me' : msg.role === 'human' ? 'human' : 'bot'}`} lang={isDeva(msg.text) ? 'hi' : undefined}>{msg.text}</div>
                 {msg.role === 'bot' && msg.ticket && (
                   <div className="bubble-meta">
@@ -111,6 +112,9 @@ export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, b
           <div className="checkin-row">
             <button className="checkin-btn" onClick={onCheckin} disabled={busy} title="PayMates scans this merchant's payments, settlements, refunds and Soundbox and fixes what it can">
               <Icon.watcher />PayMates check-in
+            </button>
+            <button className="hisaab-btn" onClick={onHisaab} disabled={busy} title="Today's money in one message: UPI received, card/wallet pending, and what PayMates fixed">
+              ₹ Today's hisaab
             </button>
           </div>
           <div className="suggest" aria-label="Try a message">

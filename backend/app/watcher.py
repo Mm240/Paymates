@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from typing import Awaitable, Callable, Optional
 
+from . import hisaab
 from .agents.orchestrator import handle_message
 from .store import Store, now_ms
 from .text import inr, render
@@ -92,6 +93,7 @@ async def checkin(store: Store, mid: str, emit: Emit, pacing: Optional[float] = 
         message = render("CHECKIN_ALL_CLEAR", merchant["lang"], {"owner_first": merchant["owner"].split()[0]})
         store.add_message(mid, "assistant", message, None)
     store.audit(None, "watcher", "checkin", {"merchant": mid, "found": len(findings)})
-    result = {"merchant_id": mid, "found": len(findings), "tickets": tickets, "message": message}
+    summary = hisaab.send(store, mid)          # end every check-in with the day's hisaab
+    result = {"merchant_id": mid, "found": len(findings), "tickets": tickets, "message": message, "hisaab": summary["text"]}
     await emit({"type": "checkin_done", **result})
     return result

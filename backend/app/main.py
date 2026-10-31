@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import council, ops, watcher
+from . import council, hisaab, ops, watcher
 from .agents.orchestrator import handle_message
 from .config import FRONTEND_DIST, POLICY, PROVIDERS, mode, provider_available, routing_table
 from .rag import index
@@ -136,6 +136,14 @@ async def checkin(mid: str):
     if not store.merchant(mid):
         raise HTTPException(404, "merchant not found")
     return sse(lambda emit: watcher.checkin(store, mid, emit))
+
+
+@app.post("/api/merchants/{mid}/hisaab")
+def merchant_hisaab(mid: str):
+    """Today's hisaab for one merchant, sent to their chat."""
+    if not store.merchant(mid):
+        raise HTTPException(404, "merchant not found")
+    return hisaab.send(store, mid)
 
 
 @app.get("/api/tickets")
