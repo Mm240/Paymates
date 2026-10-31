@@ -396,7 +396,8 @@ export function rulesTriage(text) {
   }
   const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1])
   let [top, s1] = ranked[0]
-  const s2 = ranked[1][1]
+  // GENERAL words ("what", "how", "when") frame a question; only another specific issue competes.
+  const s2 = top === 'GENERAL' ? ranked[1][1] : Math.max(0, ...ranked.filter(([k]) => k !== top && k !== 'GENERAL').map(([, v]) => v))
   const entities = extractEntities(text)
   let conf, why
   if (s1 === 0) {

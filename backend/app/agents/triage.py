@@ -36,6 +36,9 @@ def rules_triage(text: str) -> dict:
         scores[intent] = len(h) * weights.get(intent, 1.0)
     ranked = sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
     (top, s1), (_, s2) = ranked[0], ranked[1]
+    if top != "GENERAL":
+        # GENERAL words ("what", "how", "when") frame a question; only another specific issue competes.
+        s2 = max((v for k, v in scores.items() if k not in (top, "GENERAL")), default=0)
     entities = extract_entities(text)
 
     if s1 == 0:

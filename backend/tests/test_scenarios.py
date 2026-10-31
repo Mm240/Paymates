@@ -397,3 +397,22 @@ def test_dissimilar_amount_is_not_recalled(store):
     run(store, "M1002", "Customer says refund not received.")                # ₹25,000 is not within 50% of ₹7,800
     nxt = next(e for e in store.escalations() if e["status"] == "OPEN")
     assert nxt["briefing"]["similar"] is None
+
+
+# ---------------------------------------------------------------- triage: question words don't dilute a specific intent
+@pytest.mark.parametrize("text,intent", [
+    ("what is this refund i didnt get yet", "REFUND_ISSUE"),
+    ("when will my settlement come", "SETTLEMENT_DELAY"),
+    ("how is my payment failed but money deducted", "FAILED_PAYMENT"),
+    ("what happened to my soundbox, it is not announcing", "SOUNDBOX"),
+    ("how do i finish my kyc", "KYC"),
+])
+def test_general_words_do_not_lower_specific_confidence(text, intent):
+    from app.agents.triage import rules_triage
+    r = rules_triage(text)
+    assert r["intent"] == intent and r["confidence"] >= 0.6, r
+
+
+def test_refund_question_is_acted_on_not_escalated(store):
+    t, _ = run(store, "M1002", "what is this refund i didnt get yet")
+    assert t["intent"] == "REFUND_ISSUE" and t["outcome"] == "REFUND_NEEDS_APPROVAL"   # handled by the playbook, not LOW_CONFIDENCE

@@ -68,7 +68,8 @@ PROVIDERS: dict[str, dict] = {
     },
     "gemini": {
         "kind": "openai", "base": "https://generativelanguage.googleapis.com/v1beta/openai",
-        "key_env": "GEMINI_API_KEY", "fast": "gemini-2.5-flash", "strong": "gemini-2.5-pro",
+        # Rolling aliases survive model retirements. Pro has no free-tier quota, so free keys use Flash for both.
+        "key_env": "GEMINI_API_KEY", "fast": "gemini-flash-latest", "strong": os.getenv("GEMINI_STRONG_MODEL", "gemini-flash-latest"),
     },
     "groq": {
         "kind": "openai", "base": "https://api.groq.com/openai/v1", "key_env": "GROQ_API_KEY",
