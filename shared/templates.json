@@ -733,6 +733,246 @@
         "en": "I want to talk to a specialist",
         "hinglish": "Mujhe specialist se baat karni hai",
         "hi": "मुझे विशेषज्ञ से बात करनी है"
+      },
+      "sub_payment_recovered": {
+        "en": "Bank confirmed · added to next settlement",
+        "hinglish": "Bank ne confirm kiya · agle settlement mein",
+        "hi": "बैंक ने पुष्टि की · अगले सेटलमेंट में"
+      },
+      "sub_payment_auto_reversal": {
+        "en": "Customer gets it back within a day",
+        "hinglish": "Customer ko 1 din mein wapas",
+        "hi": "ग्राहक को 1 दिन में वापस"
+      },
+      "sub_payment_not_debited": {
+        "en": "Payment failed before any debit",
+        "hinglish": "Debit se pehle hi fail hua",
+        "hi": "डेबिट से पहले ही फेल हुआ"
+      },
+      "sub_settlement_retried": {
+        "en": "Re-sent to your verified bank account",
+        "hinglish": "Verified bank account mein dobara bheja",
+        "hi": "सत्यापित बैंक खाते में दोबारा भेजा"
+      },
+      "sub_settlement_processing": {
+        "en": "On its way to your bank",
+        "hinglish": "Bank ki taraf raaste mein",
+        "hi": "बैंक की ओर रास्ते में"
+      },
+      "sub_settlement_on_time": {
+        "en": "Already credited to your bank",
+        "hinglish": "Bank mein aa chuka hai",
+        "hi": "बैंक में आ चुका है"
+      },
+      "sub_settlement_kyc_hold": {
+        "en": "Released once KYC is complete",
+        "hinglish": "KYC pura hote hi chhootega",
+        "hi": "KYC पूरा होते ही जारी होगा"
+      },
+      "sub_kyc_guidance": {
+        "en": "A few documents still needed",
+        "hinglish": "Kuch documents baaki hain",
+        "hi": "कुछ दस्तावेज़ बाकी हैं"
+      },
+      "sub_kyc_verified": {
+        "en": "Nothing more needed from you",
+        "hinglish": "Aapse kuch aur nahi chahiye",
+        "hi": "आपसे और कुछ नहीं चाहिए"
+      },
+      "sub_refund_reinitiated": {
+        "en": "Re-sent to customer's original payment method",
+        "hinglish": "Customer ke original method par bheja",
+        "hi": "ग्राहक के मूल तरीके पर भेजा"
+      },
+      "sub_refund_in_progress": {
+        "en": "Processing within the normal timeline",
+        "hinglish": "Normal samay mein process ho raha",
+        "hi": "सामान्य समय में प्रोसेस हो रहा"
+      },
+      "sub_refund_done": {
+        "en": "Completed · customer has the money",
+        "hinglish": "Pura hua · customer ko mil gaya",
+        "hi": "पूरा हुआ · ग्राहक को मिल गया"
+      },
+      "sub_refund_needs_approval": {
+        "en": "Above ₹5,000 · a specialist approves",
+        "hinglish": "₹5,000 se zyada · specialist approve karenge",
+        "hi": "₹5,000 से ज़्यादा · विशेषज्ञ मंज़ूरी देंगे"
+      },
+      "sub_council_hold": {
+        "en": "Safety council wants a human check",
+        "hinglish": "Safety council ne human check maanga",
+        "hi": "सुरक्षा परिषद ने इंसानी जाँच माँगी"
+      },
+      "sub_money_needs_approval": {
+        "en": "A specialist approves before money moves",
+        "hinglish": "Paisa bhejne se pehle specialist approve karenge",
+        "hi": "पैसा भेजने से पहले विशेषज्ञ मंज़ूरी देंगे"
+      },
+      "sub_autonomy_hold": {
+        "en": "Ops asked for approval on money moves",
+        "hinglish": "Ops ne approval maanga hai",
+        "hi": "Ops ने मंज़ूरी माँगी है"
+      },
+      "sub_soundbox_fixed": {
+        "en": "Fixed remotely · test announcement played",
+        "hinglish": "Remotely theek · test announcement chala",
+        "hi": "रिमोट से ठीक · टेस्ट घोषणा चली"
+      },
+      "sub_soundbox_volume_guide": {
+        "en": "Press + three times to unmute",
+        "hinglish": "Unmute ke liye + 3 baar dabaiye",
+        "hi": "अनम्यूट के लिए + 3 बार दबाइए"
+      },
+      "sub_soundbox_ok": {
+        "en": "Online, volume and signal look fine",
+        "hinglish": "Online, volume aur signal theek",
+        "hi": "ऑनलाइन, वॉल्यूम और सिग्नल ठीक"
+      },
+      "sub_soundbox_language_set": {
+        "en": "Test announcement played in the new language",
+        "hinglish": "Nayi bhasha mein test announcement chala",
+        "hi": "नई भाषा में टेस्ट घोषणा चली"
+      },
+      "sub_soundbox_replacement": {
+        "en": "Technician will contact you within 24h",
+        "hinglish": "Technician 24 ghante mein contact karega",
+        "hi": "तकनीशियन 24 घंटे में संपर्क करेगा"
+      },
+      "sub_low_confidence": {
+        "en": "A specialist will pick this up",
+        "hinglish": "Specialist ise dekhenge",
+        "hi": "विशेषज्ञ इसे देखेंगे"
+      },
+      "sub_human_handoff": {
+        "en": "A specialist will pick this up",
+        "hinglish": "Specialist ise dekhenge",
+        "hi": "विशेषज्ञ इसे देखेंगे"
+      },
+      "sub_payment_not_found": {
+        "en": "Share the transaction ID to continue",
+        "hinglish": "Aage ke liye transaction ID bhejiye",
+        "hi": "आगे के लिए ट्रांज़ैक्शन ID भेजिए"
+      },
+      "sub_refund_not_found": {
+        "en": "Share the refund or transaction ID",
+        "hinglish": "Refund ya transaction ID bhejiye",
+        "hi": "रिफंड या ट्रांज़ैक्शन ID भेजिए"
+      },
+      "sub_faq_answer": {
+        "en": "From the help center",
+        "hinglish": "Help center se",
+        "hi": "हेल्प सेंटर से"
+      },
+      "sub_generic_resolved": {
+        "en": "Done by PayMates",
+        "hinglish": "PayMates ne kar diya",
+        "hi": "PayMates ने कर दिया"
+      },
+      "sub_followup_approved": {
+        "en": "Approved and done by a specialist",
+        "hinglish": "Specialist ne approve karke kar diya",
+        "hi": "विशेषज्ञ ने मंज़ूरी देकर कर दिया"
+      },
+      "sub_followup_declined": {
+        "en": "Expect a call from the specialist",
+        "hinglish": "Specialist ka call aayega",
+        "hi": "विशेषज्ञ का कॉल आएगा"
+      },
+      "sub_hisaab": {
+        "en": "UPI is in the bank · cards tomorrow",
+        "hinglish": "UPI bank mein · card kal",
+        "hi": "UPI बैंक में · कार्ड कल"
+      },
+      "st_failed": {
+        "en": "Failed",
+        "hinglish": "Fail hua",
+        "hi": "फेल हुआ"
+      },
+      "st_bank_confirmed": {
+        "en": "Bank confirmed",
+        "hinglish": "Bank ne confirm kiya",
+        "hi": "बैंक ने पुष्टि की"
+      },
+      "st_in_settlement": {
+        "en": "In settlement",
+        "hinglish": "Settlement mein",
+        "hi": "सेटलमेंट में"
+      },
+      "st_found": {
+        "en": "Found",
+        "hinglish": "Mila",
+        "hi": "मिला"
+      },
+      "st_with_specialist": {
+        "en": "With specialist",
+        "hinglish": "Specialist ke paas",
+        "hi": "विशेषज्ञ के पास"
+      },
+      "st_checked": {
+        "en": "Checked",
+        "hinglish": "Check kiya",
+        "hi": "जाँचा"
+      },
+      "st_held_council": {
+        "en": "Held by Council",
+        "hinglish": "Council ne roka",
+        "hi": "परिषद ने रोका"
+      },
+      "st_specialist_decides": {
+        "en": "Specialist decides",
+        "hinglish": "Specialist tay karenge",
+        "hi": "विशेषज्ञ तय करेंगे"
+      },
+      "a_view_details": {
+        "en": "View details",
+        "hinglish": "Details dekhein",
+        "hi": "विवरण देखें"
+      },
+      "a_talk_person": {
+        "en": "Talk to a person",
+        "hinglish": "Insaan se baat",
+        "hi": "इंसान से बात"
+      },
+      "q_got_it": {
+        "en": "Got it 👍",
+        "hinglish": "Thik hai 👍",
+        "hi": "ठीक है 👍"
+      },
+      "q_talk": {
+        "en": "Talk to a person",
+        "hinglish": "Insaan se baat",
+        "hi": "इंसान से बात"
+      },
+      "q_summary": {
+        "en": "Today's summary",
+        "hinglish": "Aaj ka hisaab",
+        "hi": "आज का हिसाब"
+      },
+      "q_acknowledged": {
+        "en": "Acknowledged",
+        "hinglish": "Noted",
+        "hi": "नोट किया"
+      },
+      "read_more": {
+        "en": "Read more",
+        "hinglish": "Aur padhein",
+        "hi": "और पढ़ें"
+      },
+      "read_less": {
+        "en": "Show less",
+        "hinglish": "Kam dikhayein",
+        "hi": "कम दिखाएँ"
+      },
+      "copied": {
+        "en": "Copied",
+        "hinglish": "Copy ho gaya",
+        "hi": "कॉपी हो गया"
+      },
+      "copy": {
+        "en": "Copy",
+        "hinglish": "Copy",
+        "hi": "कॉपी"
       }
     },
     "outcomes": {
@@ -754,6 +994,21 @@
         ],
         "actions": [
           "track"
+        ],
+        "subtitle": "sub_payment_recovered",
+        "steps": [
+          [
+            "st_failed",
+            "done"
+          ],
+          [
+            "st_bank_confirmed",
+            "done"
+          ],
+          [
+            "st_in_settlement",
+            "current"
+          ]
         ]
       },
       "PAYMENT_AUTO_REVERSAL": {
@@ -771,7 +1026,8 @@
             "l_arrives",
             "@v_1day"
           ]
-        ]
+        ],
+        "subtitle": "sub_payment_auto_reversal"
       },
       "PAYMENT_NOT_DEBITED": {
         "type": "payment_reversal",
@@ -782,7 +1038,8 @@
             "l_txn",
             "txn_id"
           ]
-        ]
+        ],
+        "subtitle": "sub_payment_not_debited"
       },
       "SETTLEMENT_RETRIED": {
         "type": "settlement_resent",
@@ -828,7 +1085,8 @@
         ],
         "actions": [
           "track"
-        ]
+        ],
+        "subtitle": "sub_settlement_retried"
       },
       "SETTLEMENT_PROCESSING": {
         "type": "settlement_resent",
@@ -866,7 +1124,8 @@
         ],
         "actions": [
           "track"
-        ]
+        ],
+        "subtitle": "sub_settlement_processing"
       },
       "SETTLEMENT_ON_TIME": {
         "type": "settlement_resent",
@@ -887,7 +1146,8 @@
             "l_bank",
             "bank"
           ]
-        ]
+        ],
+        "subtitle": "sub_settlement_on_time"
       },
       "SETTLEMENT_KYC_HOLD": {
         "type": "settlement_kyc_hold",
@@ -925,7 +1185,8 @@
         ],
         "actions": [
           "upload_kyc"
-        ]
+        ],
+        "subtitle": "sub_settlement_kyc_hold"
       },
       "KYC_GUIDANCE": {
         "type": "faq",
@@ -940,13 +1201,15 @@
         ],
         "actions": [
           "upload_kyc"
-        ]
+        ],
+        "subtitle": "sub_kyc_guidance"
       },
       "KYC_VERIFIED": {
         "type": "faq",
         "status": "success",
         "title": "t_kyc_ok",
-        "amount": false
+        "amount": false,
+        "subtitle": "sub_kyc_verified"
       },
       "REFUND_REINITIATED": {
         "type": "refund_status",
@@ -974,7 +1237,8 @@
         ],
         "actions": [
           "track"
-        ]
+        ],
+        "subtitle": "sub_refund_reinitiated"
       },
       "REFUND_IN_PROGRESS": {
         "type": "refund_status",
@@ -991,7 +1255,8 @@
             "l_arrives",
             "eta"
           ]
-        ]
+        ],
+        "subtitle": "sub_refund_in_progress"
       },
       "REFUND_DONE": {
         "type": "refund_status",
@@ -1006,7 +1271,8 @@
             "l_arn",
             "arn"
           ]
-        ]
+        ],
+        "subtitle": "sub_refund_done"
       },
       "REFUND_NEEDS_APPROVAL": {
         "type": "refund_held",
@@ -1030,6 +1296,21 @@
         ],
         "actions": [
           "talk_to_specialist"
+        ],
+        "subtitle": "sub_refund_needs_approval",
+        "steps": [
+          [
+            "st_found",
+            "done"
+          ],
+          [
+            "st_with_specialist",
+            "current"
+          ],
+          [
+            "st_resent",
+            "todo"
+          ]
         ]
       },
       "COUNCIL_HOLD": {
@@ -1052,6 +1333,21 @@
         ],
         "actions": [
           "talk_to_specialist"
+        ],
+        "subtitle": "sub_council_hold",
+        "steps": [
+          [
+            "st_checked",
+            "done"
+          ],
+          [
+            "st_held_council",
+            "current"
+          ],
+          [
+            "st_specialist_decides",
+            "todo"
+          ]
         ]
       },
       "MONEY_NEEDS_APPROVAL": {
@@ -1076,7 +1372,8 @@
         ],
         "actions": [
           "talk_to_specialist"
-        ]
+        ],
+        "subtitle": "sub_money_needs_approval"
       },
       "AUTONOMY_HOLD": {
         "type": "handoff",
@@ -1104,7 +1401,8 @@
         ],
         "actions": [
           "talk_to_specialist"
-        ]
+        ],
+        "subtitle": "sub_autonomy_hold"
       },
       "SOUNDBOX_FIXED": {
         "type": "soundbox_status",
@@ -1119,7 +1417,8 @@
         ],
         "actions": [
           "play_test"
-        ]
+        ],
+        "subtitle": "sub_soundbox_fixed"
       },
       "SOUNDBOX_VOLUME_GUIDE": {
         "type": "soundbox_status",
@@ -1144,7 +1443,8 @@
         ],
         "actions": [
           "play_test"
-        ]
+        ],
+        "subtitle": "sub_soundbox_volume_guide"
       },
       "SOUNDBOX_OK": {
         "type": "soundbox_status",
@@ -1159,7 +1459,8 @@
         ],
         "actions": [
           "play_test"
-        ]
+        ],
+        "subtitle": "sub_soundbox_ok"
       },
       "SOUNDBOX_LANGUAGE_SET": {
         "type": "soundbox_status",
@@ -1180,7 +1481,8 @@
         ],
         "actions": [
           "play_test"
-        ]
+        ],
+        "subtitle": "sub_soundbox_language_set"
       },
       "SOUNDBOX_REPLACEMENT": {
         "type": "soundbox_status",
@@ -1199,7 +1501,8 @@
         ],
         "actions": [
           "track"
-        ]
+        ],
+        "subtitle": "sub_soundbox_replacement"
       },
       "LOW_CONFIDENCE": {
         "type": "handoff",
@@ -1208,13 +1511,15 @@
         "amount": false,
         "actions": [
           "add_txn_id"
-        ]
+        ],
+        "subtitle": "sub_low_confidence"
       },
       "HUMAN_HANDOFF": {
         "type": "handoff",
         "status": "pending",
         "title": "t_handoff",
-        "amount": false
+        "amount": false,
+        "subtitle": "sub_human_handoff"
       },
       "PAYMENT_NOT_FOUND": {
         "type": "faq",
@@ -1224,7 +1529,8 @@
         "actions": [
           "add_txn_id",
           "talk_to_specialist"
-        ]
+        ],
+        "subtitle": "sub_payment_not_found"
       },
       "REFUND_NOT_FOUND": {
         "type": "faq",
@@ -1234,7 +1540,8 @@
         "actions": [
           "add_txn_id",
           "talk_to_specialist"
-        ]
+        ],
+        "subtitle": "sub_refund_not_found"
       },
       "FAQ_ANSWER": {
         "type": "faq",
@@ -1246,13 +1553,15 @@
             "l_source",
             "source"
           ]
-        ]
+        ],
+        "subtitle": "sub_faq_answer"
       },
       "GENERIC_RESOLVED": {
         "type": "faq",
         "status": "success",
         "title": "t_answer",
-        "amount": false
+        "amount": false,
+        "subtitle": "sub_generic_resolved"
       },
       "FOLLOWUP_APPROVED": {
         "type": "handoff",
@@ -1269,7 +1578,8 @@
             "l_specialist",
             "specialist"
           ]
-        ]
+        ],
+        "subtitle": "sub_followup_approved"
       },
       "FOLLOWUP_DECLINED": {
         "type": "handoff",
@@ -1288,19 +1598,22 @@
         ],
         "actions": [
           "talk_to_specialist"
-        ]
+        ],
+        "subtitle": "sub_followup_declined"
       },
       "HISAAB": {
         "type": "hisaab",
         "status": "info",
         "title": "t_hisaab",
-        "amount": false
+        "amount": false,
+        "subtitle": "sub_hisaab"
       },
       "_default": {
         "type": "faq",
         "status": "info",
         "title": "t_answer",
-        "amount": false
+        "amount": false,
+        "subtitle": null
       }
     }
   }

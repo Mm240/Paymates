@@ -35,8 +35,9 @@ def build(outcome: str, facts: dict, lang: str, store: Optional[Store] = None, m
     pairs = lambda items: [{"label": label(k, lang), "value": v} for k, src in items  # noqa: E731
                            if (v := _value(src, facts, lang)) not in EMPTY]
     card = {
-        "type": spec["type"], "status": spec["status"], "status_label": label(f"s_{spec['status']}", lang),
+        "type": spec["type"], "lang": lang, "status": spec["status"], "status_label": label(f"s_{spec['status']}", lang),
         "title": label(spec["title"], lang),
+        "subtitle": label(spec["subtitle"], lang) if spec.get("subtitle") else None,
         "amount": facts.get("amount") if spec.get("amount", True) and facts.get("amount") not in EMPTY else None,
         "refs": pairs(spec.get("refs", [])),
         "rows": pairs(spec.get("rows", [])),

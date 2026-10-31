@@ -135,8 +135,8 @@ async def pb_refund(run: ToolRunner, store: Store, tri: dict, base: dict) -> dic
     if rf is None:
         r = await run.run("list_refunds", {})
         cands = r.get("refunds", [])
-        if ents.get("amount"):
-            cands = [x for x in cands if x["amount"] == ents["amount"]] or cands
+        if ents.get("amount") is not None:
+            cands = [x for x in cands if x["amount"] == ents["amount"]]
         order = {"FAILED": 0, "PROCESSING": 1, "PROCESSED": 2}
         cands.sort(key=lambda x: order.get(x["status"], 3))
         rf = cands[0] if cands else None

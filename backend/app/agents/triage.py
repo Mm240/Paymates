@@ -96,7 +96,10 @@ async def triage(text: str) -> tuple[dict, str]:
         intent = str(data.get("intent", "")).upper()
         if intent not in INTENTS:
             raise ValueError(f"invalid intent {intent!r}")
-        ents = {**rules["entities"], **{k: v for k, v in (data.get("entities") or {}).items() if v not in (None, "", 0)}}
+        ents = {**rules["entities"], **{
+            k: v for k, v in (data.get("entities") or {}).items()
+            if v not in (None, "", 0) and not (k == "amount" and rules["entities"].get("amount") is not None)
+        }}
         if "amount" in ents:
             try:
                 ents["amount"] = int(str(ents["amount"]).replace(",", "").replace("₹", ""))

@@ -33,6 +33,24 @@ await test('refund question is acted on, not escalated as LOW_CONFIDENCE', async
   assert.equal(t.outcome, 'REFUND_NEEDS_APPROVAL')
 })
 
+await test('refund amount without currency does not select a different refund', async () => {
+  await fresh()
+  const tri = E.rulesTriage('2000 refund not done')
+  assert.equal(tri.entities.amount, 2000)
+  const t = await chat('M1002', '2000 refund not done')
+  assert.equal(t.outcome, 'REFUND_NOT_FOUND')
+  assert.equal(t.facts.refund_id, undefined)
+})
+
+await test('refund amount with attached rs does not select a different refund', async () => {
+  await fresh()
+  const tri = E.rulesTriage('1000rs refund')
+  assert.equal(tri.entities.amount, 1000)
+  const t = await chat('M1001', '1000rs refund')
+  assert.equal(t.outcome, 'REFUND_NOT_FOUND')
+  assert.equal(t.facts.refund_id, undefined)
+})
+
 await test('accuracy eval: >= 85% overall on 45 messages', async () => {
   const out = await E.runEvals()
   assert.equal(out.total, 45)

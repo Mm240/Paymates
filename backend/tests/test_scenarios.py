@@ -11,7 +11,7 @@ from app.agents import orchestrator  # noqa: E402
 from app.config import ModelSpec  # noqa: E402
 from app.guardrails import check, mask_pii  # noqa: E402
 from app.store import Store, now_ms  # noqa: E402
-from app.text import detect_language, inr  # noqa: E402
+from app.text import detect_language, extract_entities, inr  # noqa: E402
 
 
 def run(store, mid, text):
@@ -62,6 +62,20 @@ def test_demo_3_refund_escalates_then_human_approves(store):
     assert out["ticket"]["status"] == "RESOLVED_HUMAN"
     assert store.refund("R77812")["status"] == "PROCESSING"
     assert "Priya" in out["followup"]["text"]
+
+
+def test_unmatched_refund_amount_does_not_select_another_refund(store):
+    assert extract_entities("2000 refund not done")["amount"] == 2000
+    t, _ = run(store, "M1002", "2000 refund not done")
+    assert t["outcome"] == "REFUND_NOT_FOUND"
+    assert "refund_id" not in t["facts"]
+
+
+def test_refund_amount_with_attached_rs_does_not_select_another_refund(store):
+    assert extract_entities("1000rs refund")["amount"] == 1000
+    t, _ = run(store, "M1001", "1000rs refund")
+    assert t["outcome"] == "REFUND_NOT_FOUND"
+    assert "refund_id" not in t["facts"]
 
 
 def test_hindi_soundbox_muted_is_guided_not_faked(store):

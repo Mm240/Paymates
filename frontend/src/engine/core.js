@@ -40,7 +40,8 @@ export function extractEntities(text) {
   if ((m = text.match(/\bT\d{6,}\b/i))) e.txn_id = m[0].toUpperCase()
   if ((m = text.match(/\bS\d{6,}\b/i))) e.settlement_id = m[0].toUpperCase()
   if ((m = text.match(/\bR\d{4,}\b/i))) e.refund_id = m[0].toUpperCase()
-  m = text.match(/(?:₹|rs\.?|inr|rupees?)\s?([\d,]+)/i) || text.match(/\b([\d,]{2,})\s?(?:rs|rupees?|rupay|rupaye|रुपये)\b/i)
+  m = text.match(/(?:₹|rs\.?|inr|rupees?)\s?([\d,]+)/i) || text.match(/\b([\d,]{2,})\s?(?:rs\.?|rupees?|rupay|rupaye|रुपये)\b/i)
+  if (!m && /\brefund\b|रिफंड/i.test(text)) m = text.match(/\b([\d,]{2,})\b/)
   if (m) {
     const n = parseInt(m[1].replace(/,/g, ''), 10)
     if (!Number.isNaN(n)) e.amount = n

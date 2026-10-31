@@ -161,6 +161,12 @@ export default function App() {
     } catch (err) { say(`Couldn't build today's hisaab: ${err.message}`) }
   }
 
+  // "Today's summary" quick reply: show what the merchant tapped, then answer with the hisaab card.
+  const summary = async (mid, text) => {
+    addMsg(mid, { role: 'merchant', text, ts: Date.now() })
+    await hisaab(mid)
+  }
+
   const send = async (mid, text) => {
     const e = engineRef.current
     if (!e || busy) return
@@ -283,7 +289,7 @@ export default function App() {
             <MerchantPhone
               merchants={merchants} merchantId={merchantId} onPick={setMerchantId}
               messages={convos[merchantId] || []} busy={busy} busyLabel={busyLabel}
-              onSend={(t) => send(merchantId, t)} onCheckin={() => checkin(merchantId)} onHisaab={() => hisaab(merchantId)} onToast={say} voice={voice} onVoice={() => setVoice((v) => !v)}
+              onSend={(t) => send(merchantId, t)} onCheckin={() => checkin(merchantId)} onHisaab={() => hisaab(merchantId)} onSummary={(t) => summary(merchantId, t)} onToast={say} voice={voice} onVoice={() => setVoice((v) => !v)}
               canMic={!__ARTIFACT__ && typeof window !== 'undefined' && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)}
             />
             <AgentTrace trace={trace} merchants={merchants} onTry={send} live={live} />

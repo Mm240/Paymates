@@ -54,11 +54,17 @@ def extract_entities(text: str) -> dict:
     if m := re.search(r"\bR\d{4,}\b", text, re.I):
         ents["refund_id"] = m.group(0).upper()
     if m := re.search(r"(?:₹|rs\.?|inr|rupees?)\s?([\d,]+)", text, re.I) or \
-            re.search(r"\b([\d,]{2,})\s?(?:rs|rupees?|rupay|rupaye|रुपये)\b", text, re.I):
+            re.search(r"\b([\d,]{2,})\s?(?:rs\.?|rupees?|rupay|rupaye|रुपये)\b", text, re.I):
         try:
             ents["amount"] = int(m.group(1).replace(",", ""))
         except ValueError:
             pass
+    elif re.search(r"\brefund\b|रिफंड", text, re.I):
+        if m := re.search(r"\b([\d,]{2,})\b", text):
+            try:
+                ents["amount"] = int(m.group(1).replace(",", ""))
+            except ValueError:
+                pass
     return ents
 
 

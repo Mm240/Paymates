@@ -32,23 +32,57 @@ const LANG_TAG = { hinglish: 'Hinglish', en: 'English', hi: 'हिन्दी'
 const isDeva = (t) => /[ऀ-ॿ]/.test(t || '')
 
 // ====================================================================== rich reply card (generative UI, built from facts)
-const STATUS_ICON = {
-  success: () => <Icon.ok />,
-  held: () => <Icon.hold />,
-  pending: () => <Icon.hold />,
-  info: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>,
+const lbl = (key, lang) => { const t = TPL.cards.labels[key]; return t ? t[lang] || t.en : key }
+const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+const SVG = (props) => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props} />
+const HEAD_ICON = {
+  success: () => <SVG><path d="m5 12 4.5 4.5L19 7" /></SVG>,
+  held: () => <SVG><path d="M7 3h10M7 21h10M8 3v4l4 5-4 5v4M16 3v4l-4 5 4 5v4" /></SVG>,
+  pending: () => <SVG><path d="M7 3h10M7 21h10M8 3v4l4 5-4 5v4M16 3v4l-4 5 4 5v4" /></SVG>,
+  info: () => <SVG><path d="M12 11v6M12 7.5h.01" /></SVG>,
+  council: () => <SVG><path d="M12 3 5 6v5.5c0 4.4 3 7.9 7 9.5 4-1.6 7-5.1 7-9.5V6l-7-3z" /><path d="m9 12 2 2 4-4" /></SVG>,
+}
+const CopyIcon = () => <SVG width="13" height="13"><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></SVG>
+
+// ₹ count-up for the hero amount (600ms); shows the final value at once when motion is reduced.
+function CountUp({ value }) {
+  const target = Number(String(value).replace(/[^\d]/g, '')) || 0
+  const [n, setN] = useState(reducedMotion() ? target : 0)
+  useEffect(() => {
+    if (reducedMotion() || !target) { setN(target); return undefined }
+    let raf, t0
+    const tick = (t) => {
+      t0 = t0 ?? t
+      const k = Math.min(1, (t - t0) / 600)
+      setN(Math.round(target * (1 - (1 - k) ** 3)))
+      if (k < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target])
+  return <>{inr(n)}</>
 }
 
-export function ReplyCard({ card, onAction }) {
-  const Ic = STATUS_ICON[card.status] || STATUS_ICON.info
+export function ReplyCard({ card, onAction, onCopy }) {
+  const tone = card.type === 'council_hold' ? 'council' : card.status
+  const Ic = HEAD_ICON[tone] || HEAD_ICON.info
+  const lang = card.lang || 'en'
   const total = (card.bars || []).reduce((a, b) => a + b.value, 0)
+  const extras = (card.actions || []).filter((a) => !['talk_to_specialist', 'track'].includes(a.action))
   return (
-    <div className={`rcard ${card.status}`} data-type={card.type}>
-      <div className="rcard-top">
+    <div className={`rcard ${tone}`} data-type={card.type} lang={lang === 'hi' ? 'hi' : undefined}>
+      <div className="rcard-head">
+        <span className="rcard-icon"><Ic /></span>
         <span className="rcard-title">{card.title}</span>
-        <span className={`rcard-chip ${card.status}`}><Ic />{card.status_label}</span>
+        <span className="rcard-chip">{card.status_label}</span>
       </div>
-      {card.amount && <div className="rcard-amount num">{card.amount}</div>}
+      {card.amount && (
+        <div className="rcard-hero">
+          <div className="rcard-amount num"><CountUp value={card.amount} /></div>
+          {card.subtitle && <div className="rcard-sub">{card.subtitle}</div>}
+        </div>
+      )}
+      {!card.amount && card.subtitle && <div className="rcard-sub solo">{card.subtitle}</div>}
       {card.bars && (
         <div className="rcard-bars">
           <div className="rcard-bar" role="img" aria-label={card.bars.map((b) => `${b.label} ${b.amount}`).join(', ')}>
@@ -60,27 +94,61 @@ export function ReplyCard({ card, onAction }) {
         </div>
       )}
       {card.steps?.length > 0 && (
-        <ol className={`rcard-steps n${card.steps.length}`}>
-          {card.steps.map((st, i) => <li key={i} className={st.state}><span className="dot" />{st.label}</li>)}
+        <ol className="rcard-steps" aria-label="Progress">
+          {card.steps.map((st, i) => <li key={i} className={st.state} aria-current={st.state === 'current' ? 'step' : undefined}><span className="dot" />{st.label}</li>)}
         </ol>
       )}
       {(card.refs.length > 0 || card.rows.length > 0) && (
         <dl className="rcard-kv">
-          {card.refs.map((r, i) => <div key={`r${i}`}><dt>{r.label}</dt><dd className="mono">{r.value}</dd></div>)}
+          {card.refs.map((r, i) => (
+            <div key={`r${i}`}>
+              <dt>{r.label}</dt>
+              <dd className="mono">{r.value}
+                <button type="button" className="copy" onClick={() => onCopy(r.value, lang)} aria-label={`${lbl('copy', lang)} ${r.label} ${r.value}`} title={lbl('copy', lang)}><CopyIcon /></button>
+              </dd>
+            </div>
+          ))}
           {card.rows.map((r, i) => <div key={`w${i}`}><dt>{r.label}</dt><dd className={r.vote ? `vote ${r.vote}` : ''}>{r.value}</dd></div>)}
         </dl>
       )}
-      {card.actions?.length > 0 && (
-        <div className="rcard-actions">
-          {card.actions.map((a, i) => <button key={a.action} type="button" className={i === 0 ? 'primary' : ''} onClick={() => onAction(a.action, card)}>{a.label}</button>)}
-        </div>
+      {extras.length > 0 && (
+        <div className="rcard-links">{extras.map((a) => <button key={a.action} type="button" onClick={() => onAction(a.action, card)}>{a.label} →</button>)}</div>
       )}
+      <div className="rcard-actions">
+        <button type="button" className="primary" onClick={() => onAction('view_details', card)}>{lbl('a_view_details', lang)}</button>
+        <button type="button" className="ghost" onClick={() => onAction('talk_person', card)}>{lbl('a_talk_person', lang)}</button>
+      </div>
     </div>
   )
 }
 
+// A bot reply: card on top, text collapsed to two lines under it, quick replies below.
+function BotBubble({ msg, lang, busy, onCardAction, onCopy, onQuick }) {
+  const [open, setOpen] = useState(false)
+  const [ack, setAck] = useState(false)
+  const role = msg.role === 'human' ? 'human' : 'bot'
+  const collapsible = Boolean(msg.card) && (msg.text || '').length > 90
+  return (
+    <>
+      <div className={`bubble ${role}${msg.card ? ' has-card' : ''}`} lang={isDeva(msg.text) ? 'hi' : undefined}>
+        {msg.card && <ReplyCard card={msg.card} onAction={onCardAction} onCopy={onCopy} />}
+        <div className={`btext ${collapsible && !open ? 'clamped' : ''}`}>{msg.text}</div>
+        {collapsible && <button type="button" className="more" onClick={() => setOpen((o) => !o)} aria-expanded={open}>{lbl(open ? 'read_less' : 'read_more', lang)}</button>}
+      </div>
+      <div className="quick" role="group" aria-label="Quick replies">
+        {ack
+          ? <span className="quick-ack">✓ {lbl('q_acknowledged', lang)}</span>
+          : [['got_it', 'q_got_it'], ['talk', 'q_talk'], ['summary', 'q_summary']].map(([k, key]) => (
+            <button key={k} type="button" disabled={busy && k !== 'got_it'} lang={lang === 'hi' ? 'hi' : undefined}
+              onClick={() => (k === 'got_it' ? setAck(true) : onQuick(k, lbl(key, lang)))}>{lbl(key, lang)}</button>
+          ))}
+      </div>
+    </>
+  )
+}
+
 // ====================================================================== phone
-export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, busyLabel, onSend, onCheckin, onHisaab, onToast, voice, onVoice, canMic }) {
+export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, busyLabel, onSend, onCheckin, onHisaab, onSummary, onToast, voice, onVoice, canMic }) {
   const [text, setText] = useState('')
   const inputRef = useRef(null)
   const [listening, setListening] = useState(false)
@@ -97,16 +165,15 @@ export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, b
     onSend(v)
     setText('')
   }
-  // Card buttons do real things: send a message, focus the input, speak, or confirm with a toast.
+  // Card buttons do real things: send a message, focus the input, scroll to the trace, speak, or confirm with a toast.
   const cardAction = (action, card) => {
-    const lang = m?.lang || 'en'
-    if (action === 'talk_to_specialist') submit(TPL.cards.labels.m_talk_to_specialist[lang])
+    const lang = card?.lang || m?.lang || 'en'
+    if (action === 'talk_person' || action === 'talk_to_specialist') submit(lbl('a_talk_person', lang))
+    else if (action === 'view_details') document.querySelector('[aria-label="Agent trace"]')?.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' })
     else if (action === 'add_txn_id') { setText('Txn ID: '); setTimeout(() => inputRef.current?.focus(), 0) }
     else if (action === 'upload_kyc') onToast?.('KYC upload opens in the Paytm for Business app (demo)')
-    else if (action === 'track') {
-      const ref = card.refs.find((r) => /UTR|Ticket|टिकट|Ref|Txn/.test(r.label)) || card.refs[0]
-      onToast?.(`Tracking ${ref ? `${ref.label} ${ref.value}` : card.title}: you'll get an update here`)
-    } else if (action === 'play_test') {
+    else if (action === 'track') onToast?.(`Tracking ${card.refs[0] ? `${card.refs[0].label} ${card.refs[0].value}` : card.title}: you'll get an update here`)
+    else if (action === 'play_test') {
       try {
         speechSynthesis.cancel()
         const u = new SpeechSynthesisUtterance('₹1 received on PayMates')
@@ -115,6 +182,15 @@ export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, b
         onToast?.('Playing a test announcement: "₹1 received on PayMates"')
       } catch { onToast?.('This browser cannot play the test announcement') }
     }
+  }
+  const copy = async (value, lang) => {
+    try { await navigator.clipboard.writeText(String(value)) } catch { /* clipboard blocked; still confirm what was meant */ }
+    onToast?.(`${lbl('copied', lang)}: ${value}`)
+  }
+  const quick = (kind, text) => {
+    if (busy) return
+    if (kind === 'talk') submit(text)
+    else if (kind === 'summary') onSummary?.(text)
   }
   const listen = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -164,10 +240,9 @@ export function MerchantPhone({ merchants, merchantId, onPick, messages, busy, b
                 {msg.role === 'human' && <div className="bubble-meta"><span className="avatar human" style={{ width: 18, height: 18, fontSize: 10, borderRadius: 6 }}>{msg.from?.[0] || 'S'}</span>{msg.from} · Specialist</div>}
                 {msg.proactive && <div className="bubble-meta"><span className="chip noticed"><Icon.watcher />PayMates noticed</span></div>}
                 {msg.hisaab && <div className="bubble-meta"><span className="chip hisaab">₹ Today's hisaab</span></div>}
-                <div className={`bubble ${msg.role === 'merchant' ? 'me' : msg.role === 'human' ? 'human' : 'bot'}${msg.card ? ' has-card' : ''}`} lang={isDeva(msg.text) ? 'hi' : undefined}>
-                  {msg.card && <ReplyCard card={msg.card} onAction={cardAction} />}
-                  {msg.text}
-                </div>
+                {msg.role === 'merchant'
+                  ? <div className="bubble me" lang={isDeva(msg.text) ? 'hi' : undefined}>{msg.text}</div>
+                  : <BotBubble msg={msg} lang={msg.card?.lang || m?.lang || 'en'} busy={busy} onCardAction={cardAction} onCopy={copy} onQuick={quick} />}
                 {msg.role === 'bot' && msg.ticket && (
                   <div className="bubble-meta">
                     <span className={`chip ${STATUS[msg.ticket.status]?.cls || ''}`} style={{ padding: '0 7px', fontSize: 11 }}>{STATUS[msg.ticket.status]?.short}</span>

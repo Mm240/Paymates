@@ -434,7 +434,9 @@ async function triage(text) {
     const intent = String(data.intent || '').toUpperCase()
     if (!INTENTS[intent]) throw new Error('invalid intent')
     const ents = { ...rules.entities }
-    for (const [k, v] of Object.entries(data.entities || {})) if (v !== null && v !== '' && v !== 0) ents[k] = v
+    for (const [k, v] of Object.entries(data.entities || {})) {
+      if (v !== null && v !== '' && v !== 0 && !(k === 'amount' && rules.entities.amount != null)) ents[k] = v
+    }
     if (ents.amount != null) { const n = parseInt(String(ents.amount).replace(/[₹,]/g, ''), 10); if (Number.isNaN(n)) delete ents.amount; else ents.amount = n }
     return [{ intent, confidence: Math.round(Number(data.confidence ?? 0.7) * 100) / 100, entities: ents,
       urgency: data.urgency || rules.urgency, language: rules.language, reasoning: String(data.reasoning || '').slice(0, 160) }, m.label]
@@ -554,7 +556,7 @@ async function pbRefund(run, tri, base) {
   if (!rf) {
     const r = await run.run('list_refunds', {})
     let c = r.refunds || []
-    if (ents.amount) { const f = c.filter((x) => x.amount === ents.amount); if (f.length) c = f }
+    if (ents.amount != null) c = c.filter((x) => x.amount === ents.amount)
     const order = { FAILED: 0, PROCESSING: 1, PROCESSED: 2 }
     c = [...c].sort((a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3))
     rf = c[0] || null
@@ -834,7 +836,8 @@ export function buildCard(outcome, facts, lang, mid = null, extra = {}) {
   const val = (src) => (src.startsWith('@') ? cardLabel(src.slice(1), lang) : facts[src])
   const pairs = (items = []) => items.map(([k, src]) => ({ label: cardLabel(k, lang), value: val(src) })).filter((x) => !EMPTY.has(x.value))
   const card = {
-    type: spec.type, status: spec.status, status_label: cardLabel(`s_${spec.status}`, lang), title: cardLabel(spec.title, lang),
+    type: spec.type, lang, status: spec.status, status_label: cardLabel(`s_${spec.status}`, lang), title: cardLabel(spec.title, lang),
+    subtitle: spec.subtitle ? cardLabel(spec.subtitle, lang) : null,
     amount: spec.amount !== false && !EMPTY.has(facts.amount) ? facts.amount : null,
     refs: pairs(spec.refs), rows: pairs(spec.rows),
     steps: (spec.steps || []).map(([k, state]) => ({ label: cardLabel(k, lang), state })),
