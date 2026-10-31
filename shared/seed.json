@@ -1,0 +1,386 @@
+{
+  "_note": "Simulated demo data for the PayMates prototype. Not real merchants, customers or Paytm records. Times are minutes relative to app start (negative = in the past).",
+  "policy": {
+    "auto_money_limit": 5000,
+    "council_daily_cap": 25000,
+    "council_daily_cap_kyc_pending": 2000,
+    "confidence_threshold": 0.6,
+    "manual_minutes_per_ticket": 18,
+    "retryable_hold_reasons": [
+      "BANK_TIMEOUT"
+    ],
+    "currency": "INR"
+  },
+  "merchants": [
+    {
+      "id": "M1001",
+      "name": "Raju Kirana Store",
+      "owner": "Raju Verma",
+      "city": "Lucknow",
+      "category": "Grocery",
+      "lang": "hinglish",
+      "phone": "9876543221",
+      "plan": "Soundbox 4G + QR",
+      "settlement_cycle": "T+1",
+      "kyc_status": "VERIFIED",
+      "kyc_missing": [],
+      "bank": "SBI ••4521",
+      "bank_verified": true,
+      "soundbox": {
+        "id": "SB-40117",
+        "model": "Soundbox 4G",
+        "online": true,
+        "volume": 70,
+        "signal": "good",
+        "language": "Hindi",
+        "network_fallback": true,
+        "fault": null
+      }
+    },
+    {
+      "id": "M1002",
+      "name": "Annapurna Sweets",
+      "owner": "Meena Iyer",
+      "city": "Chennai",
+      "category": "Sweets & snacks",
+      "lang": "en",
+      "phone": "9840012377",
+      "plan": "Card Soundbox + QR",
+      "settlement_cycle": "T+1",
+      "kyc_status": "VERIFIED",
+      "kyc_missing": [],
+      "bank": "HDFC Bank ••0937",
+      "bank_verified": true,
+      "soundbox": {
+        "id": "SB-40552",
+        "model": "Card Soundbox",
+        "online": true,
+        "volume": 80,
+        "signal": "good",
+        "language": "English",
+        "network_fallback": true,
+        "fault": null
+      }
+    },
+    {
+      "id": "M1003",
+      "name": "Gupta Medicals",
+      "owner": "Anil Gupta",
+      "city": "Kota",
+      "category": "Pharmacy",
+      "lang": "hi",
+      "phone": "9414098765",
+      "plan": "Soundbox 4G + QR",
+      "settlement_cycle": "T+1",
+      "kyc_status": "PENDING_DOCS",
+      "kyc_missing": [
+        "GST certificate",
+        "Shop photo showing the QR code"
+      ],
+      "bank": "PNB ••7710",
+      "bank_verified": true,
+      "soundbox": {
+        "id": "SB-41890",
+        "model": "Soundbox 4G",
+        "online": true,
+        "volume": 0,
+        "signal": "weak",
+        "language": "Hindi",
+        "network_fallback": false,
+        "fault": null
+      }
+    }
+  ],
+  "transactions": [
+    {
+      "id": "T88120045",
+      "merchant_id": "M1001",
+      "amount": 1250,
+      "method": "UPI",
+      "payer": "ramesh.k@okaxis",
+      "at_min": -840,
+      "gateway_status": "FAILED",
+      "bank_debited": true,
+      "bank_status": "SUCCESS"
+    },
+    {
+      "id": "T88120012",
+      "merchant_id": "M1001",
+      "amount": 480,
+      "method": "UPI",
+      "payer": "sunita22@ybl",
+      "at_min": -900,
+      "gateway_status": "SUCCESS",
+      "bank_debited": true,
+      "bank_status": "SUCCESS"
+    },
+    {
+      "id": "T88119987",
+      "merchant_id": "M1001",
+      "amount": 2100,
+      "method": "UPI",
+      "payer": "amit.s@paytm",
+      "at_min": -960,
+      "gateway_status": "SUCCESS",
+      "bank_debited": true,
+      "bank_status": "SUCCESS"
+    },
+    {
+      "id": "T88120101",
+      "merchant_id": "M1001",
+      "amount": 90,
+      "method": "UPI",
+      "payer": "chotu99@ibl",
+      "at_min": -120,
+      "gateway_status": "FAILED",
+      "bank_debited": false,
+      "bank_status": "FAILED"
+    },
+    {
+      "id": "T88230501",
+      "merchant_id": "M1002",
+      "amount": 320,
+      "method": "UPI",
+      "payer": "kavya.r@oksbi",
+      "at_min": -300,
+      "gateway_status": "FAILED",
+      "bank_debited": true,
+      "bank_status": "FAILED"
+    },
+    {
+      "id": "T88230488",
+      "merchant_id": "M1002",
+      "amount": 1560,
+      "method": "Card",
+      "payer": "card ••8812",
+      "at_min": -360,
+      "gateway_status": "SUCCESS",
+      "bank_debited": true,
+      "bank_status": "SUCCESS"
+    },
+    {
+      "id": "T88229901",
+      "merchant_id": "M1002",
+      "amount": 7800,
+      "method": "UPI",
+      "payer": "vignesh.p@okicici",
+      "at_min": -5800,
+      "gateway_status": "SUCCESS",
+      "bank_debited": true,
+      "bank_status": "SUCCESS"
+    },
+    {"id": "T88340266", "merchant_id": "M1003", "amount": 3400, "method": "UPI", "payer": "deepak.v@okhdfcbank", "at_min": -75, "gateway_status": "FAILED", "bank_debited": true, "bank_status": "SUCCESS"},
+    {
+      "id": "T88340210",
+      "merchant_id": "M1003",
+      "amount": 740,
+      "method": "UPI",
+      "payer": "pooja.m@ybl",
+      "at_min": -200,
+      "gateway_status": "SUCCESS",
+      "bank_debited": true,
+      "bank_status": "SUCCESS"
+    }
+  ],
+  "settlements": [
+    {
+      "id": "S2610290",
+      "merchant_id": "M1001",
+      "amount": 21305,
+      "status": "SETTLED",
+      "hold_reason": null,
+      "expected_min": -1800,
+      "settled_min": -1790,
+      "utr": "SBIN526102904417",
+      "destination": "SBI ••4521"
+    },
+    {
+      "id": "S2610300",
+      "merchant_id": "M1001",
+      "amount": 18640,
+      "status": "ON_HOLD",
+      "hold_reason": "BANK_TIMEOUT",
+      "expected_min": -360,
+      "settled_min": null,
+      "utr": null,
+      "destination": "SBI ••4521"
+    },
+    {
+      "id": "S2610301",
+      "merchant_id": "M1002",
+      "amount": 42880,
+      "status": "SETTLED",
+      "hold_reason": null,
+      "expected_min": -480,
+      "settled_min": -470,
+      "utr": "HDFC526103018830",
+      "destination": "HDFC Bank ••0937"
+    },
+    {
+      "id": "S2610302",
+      "merchant_id": "M1003",
+      "amount": 9415,
+      "status": "ON_HOLD",
+      "hold_reason": "KYC_PENDING",
+      "expected_min": -300,
+      "settled_min": null,
+      "utr": null,
+      "destination": "PNB ••7710"
+    }
+  ],
+  "refunds": [
+    {
+      "id": "R77812",
+      "merchant_id": "M1002",
+      "txn_id": "T88229901",
+      "amount": 7800,
+      "status": "FAILED",
+      "reason": "BANK_REJECTED_TECHNICAL",
+      "initiated_min": -4300,
+      "arn": null,
+      "eta_min": null
+    },
+    {
+      "id": "R77840",
+      "merchant_id": "M1002",
+      "txn_id": "T88230488",
+      "amount": 640,
+      "status": "PROCESSING",
+      "reason": null,
+      "initiated_min": -1200,
+      "arn": null,
+      "eta_min": 1440
+    },
+    {
+      "id": "R77790",
+      "merchant_id": "M1001",
+      "txn_id": "T88119987",
+      "amount": 350,
+      "status": "PROCESSED",
+      "reason": null,
+      "initiated_min": -2900,
+      "arn": "ARN74410093321",
+      "eta_min": null
+    }
+  ],
+  "ticket_history": [
+    {
+      "id": "TK-0981",
+      "merchant_id": "M1001",
+      "at_min": -20160,
+      "intent": "SOUNDBOX",
+      "summary": "Soundbox stopped announcing after a power cut. Fixed by restart and volume reset.",
+      "status": "RESOLVED_HUMAN"
+    },
+    {
+      "id": "TK-1022",
+      "merchant_id": "M1002",
+      "at_min": -10080,
+      "intent": "REFUND_ISSUE",
+      "summary": "Asked about refund timelines for card payments.",
+      "status": "RESOLVED_HUMAN"
+    }
+  ],
+  "kb": [
+    {
+      "id": "KB-101",
+      "title": "When does my money reach my bank? (settlement timelines)",
+      "body": "Standard merchant accounts are settled on a T+1 basis: payments collected today reach your bank account by 6 PM on the next working day. Bank holidays shift the date. A settlement can go on hold. BANK_TIMEOUT means the receiving bank did not confirm in time; it is safe to retry to the same verified account. KYC_PENDING means settlement is paused until pending KYC documents are approved. Every settled payout carries a UTR number you can quote to your bank.",
+      "short": {
+        "en": "Payments are settled T+1: money collected today reaches your bank by 6 PM on the next working day. Bank holidays can shift this by a day.",
+        "hinglish": "Settlement T+1 hota hai: aaj ka collection agle working day shaam 6 baje tak aapke bank mein aa jata hai. Bank holiday ho to ek din aage ho sakta hai.",
+        "hi": "सेटलमेंट T+1 होता है: आज का कलेक्शन अगले कार्य दिवस शाम 6 बजे तक आपके बैंक खाते में आ जाता है। बैंक छुट्टी हो तो एक दिन आगे हो सकता है।"
+      }
+    },
+    {
+      "id": "KB-102",
+      "title": "Payment failed but money was deducted from the customer",
+      "body": "Sometimes the customer's bank debits the money but the confirmation reaches the payment network late, so the payment shows as failed. Recheck the status with the bank. If the bank confirms success, the payment is marked successful and added to the merchant's settlement. If the bank confirms failure, the amount is auto-reversed to the customer, usually within T+1 for UPI, and the customer can pay again.",
+      "short": {
+        "en": "If a payment failed but the customer was debited, the bank either confirms it late (you get the money) or reverses it to the customer, usually within one working day.",
+        "hinglish": "Payment fail hua par customer ka paisa kata, to bank ya to late confirm karta hai (paisa aapko milta hai) ya customer ko ek working day mein wapas kar deta hai.",
+        "hi": "अगर भुगतान फेल हुआ पर ग्राहक के पैसे कटे, तो बैंक या तो देर से पुष्टि करता है (पैसा आपको मिलता है) या एक कार्य दिवस में ग्राहक को वापस कर देता है।"
+      }
+    },
+    {
+      "id": "KB-103",
+      "title": "Refund timelines and failed refunds",
+      "body": "UPI refunds usually reach the customer within 1 to 2 working days; card refunds take 5 to 7 working days. A refund can fail when the customer's account is closed or frozen. A failed refund can be re-initiated to the original source or an alternate account. Under PayMates policy, re-initiating a refund above Rs 5,000 needs approval from a human support specialist.",
+      "short": {
+        "en": "UPI refunds take 1-2 working days and card refunds 5-7. A failed refund can be re-initiated; amounts above ₹5,000 need a specialist's approval.",
+        "hinglish": "UPI refund 1-2 working din aur card refund 5-7 din leta hai. Fail hua refund dobara bheja ja sakta hai; ₹5,000 se upar ke liye specialist approval chahiye.",
+        "hi": "UPI रिफंड 1-2 कार्य दिवस और कार्ड रिफंड 5-7 दिन लेता है। फेल हुआ रिफंड दोबारा भेजा जा सकता है; ₹5,000 से ऊपर के लिए विशेषज्ञ की मंज़ूरी चाहिए।"
+      }
+    },
+    {
+      "id": "KB-104",
+      "title": "KYC documents needed to keep settlements running",
+      "body": "To complete merchant KYC you need a PAN card, an identity proof, bank account proof such as a cancelled cheque, a GST certificate if registered, and a shop photo showing the QR code. Upload documents from the app under Profile, then KYC. Settlements on KYC hold are released automatically once documents are approved, usually within 24 hours.",
+      "short": {
+        "en": "For KYC you need PAN, an ID proof, bank proof, GST certificate (if registered) and a shop photo showing your QR. Upload them under Profile > KYC.",
+        "hinglish": "KYC ke liye PAN, ID proof, bank proof, GST certificate (agar registered ho) aur QR ke saath dukaan ki photo chahiye. App mein Profile > KYC mein upload karein.",
+        "hi": "KYC के लिए PAN, पहचान पत्र, बैंक प्रमाण, GST प्रमाणपत्र (अगर पंजीकृत हैं) और QR के साथ दुकान की फोटो चाहिए। ऐप में प्रोफ़ाइल > KYC में अपलोड करें।"
+      }
+    },
+    {
+      "id": "KB-105",
+      "title": "Soundbox not announcing payments",
+      "body": "If your Soundbox is not announcing payments, check that the volume is not zero, the device is charged, and the network signal is good. Weak signal can delay announcements; enabling network fallback switches to a stronger network. Restart the device by holding the power button for 5 seconds. Announcement language can be changed from the app.",
+      "short": {
+        "en": "A silent Soundbox is usually volume at zero, a weak network or low battery. Raising the volume and turning on network fallback fixes most cases.",
+        "hinglish": "Soundbox chup hai to aksar volume zero, weak network ya low battery hota hai. Volume badhane aur network fallback on karne se zyadatar theek ho jata hai.",
+        "hi": "साउंडबॉक्स चुप है तो अक्सर वॉल्यूम शून्य, कमज़ोर नेटवर्क या कम बैटरी होती है। वॉल्यूम बढ़ाने और नेटवर्क फ़ॉलबैक चालू करने से ज़्यादातर ठीक हो जाता है।"
+      }
+    },
+    {
+      "id": "KB-106",
+      "title": "Change Soundbox announcement language",
+      "body": "Soundbox can announce payments in several Indian languages including Hindi, English, Tamil, Telugu, Marathi, Bengali, Gujarati, Kannada, Malayalam, Punjabi and Odia. Change it from the app under Devices, then Announcement language.",
+      "short": {
+        "en": "You can change the announcement language in the app under Devices > Announcement language.",
+        "hinglish": "Announcement ki bhasha app mein Devices > Announcement language se badal sakte hain.",
+        "hi": "घोषणा की भाषा ऐप में डिवाइस > घोषणा भाषा से बदल सकते हैं।"
+      }
+    },
+    {
+      "id": "KB-107",
+      "title": "Customer dispute or chargeback",
+      "body": "If a customer raises a dispute or chargeback, you will be asked to share proof of delivery or service such as a bill. Respond within 7 days. Disputes above Rs 5,000 are reviewed by a human specialist.",
+      "short": {
+        "en": "For a customer dispute, share proof such as the bill within 7 days. Disputes above ₹5,000 are reviewed by a specialist.",
+        "hinglish": "Customer dispute ho to 7 din ke andar bill jaisa proof bhejein. ₹5,000 se upar ke dispute specialist dekhte hain.",
+        "hi": "ग्राहक विवाद हो तो 7 दिन के अंदर बिल जैसा प्रमाण भेजें। ₹5,000 से ऊपर के विवाद विशेषज्ञ देखते हैं।"
+      }
+    },
+    {
+      "id": "KB-108",
+      "title": "QR code not scanning",
+      "body": "If customers cannot scan your QR, clean the sticker, make sure it is not torn or faded, and check it shows your shop name when scanned. Order a free replacement QR from the app under Help, then Order QR.",
+      "short": {
+        "en": "If your QR won't scan, clean it and check it isn't torn. You can order a free replacement under Help > Order QR.",
+        "hinglish": "QR scan nahi ho raha to use saaf karein aur dekhein ki fata na ho. Help > Order QR se naya QR free mangwa sakte hain.",
+        "hi": "QR स्कैन नहीं हो रहा तो उसे साफ़ करें और देखें कि फटा न हो। हेल्प > ऑर्डर QR से नया QR मुफ़्त मँगवा सकते हैं।"
+      }
+    },
+    {
+      "id": "KB-109",
+      "title": "Download statements and reports",
+      "body": "Daily, weekly and monthly statements are available in the app under Reports. You can download a PDF or Excel statement and share it with your accountant. Each settlement line shows the UTR number.",
+      "short": {
+        "en": "Download daily, weekly or monthly statements from Reports in the app, as PDF or Excel.",
+        "hinglish": "App ke Reports section se daily, weekly ya monthly statement PDF ya Excel mein download karein.",
+        "hi": "ऐप के रिपोर्ट्स सेक्शन से दैनिक, साप्ताहिक या मासिक स्टेटमेंट PDF या Excel में डाउनलोड करें।"
+      }
+    },
+    {
+      "id": "KB-110",
+      "title": "When PayMates hands over to a human",
+      "body": "PayMates resolves routine issues on its own. It hands a case to a human specialist when it is not confident, when an action would move money above the approval limit, when the merchant asks for a person, or when a case needs judgement. The specialist receives a full briefing so the merchant never has to repeat themselves.",
+      "short": {
+        "en": "I hand over to a human specialist when I'm not sure, when money above the approval limit would move, or whenever you ask. They get the full story, so you won't repeat yourself.",
+        "hinglish": "Jab mujhe pakka na ho, limit se zyada paisa move karna ho, ya aap kahein, tab main specialist ko case deta hoon. Unhe poori jaankari milti hai, aapko dobara batana nahi padega.",
+        "hi": "जब मुझे पक्का न हो, सीमा से ज़्यादा पैसा भेजना हो, या आप कहें, तब मैं विशेषज्ञ को केस देता हूँ। उन्हें पूरी जानकारी मिलती है, आपको दोबारा बताना नहीं पड़ेगा।"
+      }
+    }
+  ]
+}

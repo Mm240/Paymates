@@ -1,0 +1,214 @@
+{
+  "_note": "Reply templates used by the rules engine, and as a safety net when an LLM is unavailable. Placeholders in {braces} are filled by the engine.",
+  "replies": {
+    "PAYMENT_RECOVERED": {
+      "en": "Good news, {owner_first}. I checked payment {txn_id} of {amount} with the customer's bank. The bank confirms it went through, so I've marked it successful and added {amount} to your next settlement. Nothing more needed from you.",
+      "hinglish": "Achhi khabar {owner_first} ji! Maine payment {txn_id} ({amount}) customer ke bank se check kiya. Bank ne payment confirm kar diya hai, isliye maine ise successful mark kar diya aur {amount} aapke agle settlement mein jud gaye hain. Aapko kuch karne ki zarurat nahi.",
+      "hi": "अच्छी खबर {owner_first} जी! मैंने भुगतान {txn_id} ({amount}) ग्राहक के बैंक से जाँचा। बैंक ने पुष्टि कर दी है, इसलिए इसे सफल मार्क कर दिया है और {amount} आपके अगले सेटलमेंट में जुड़ गए हैं। आपको कुछ करने की ज़रूरत नहीं।"
+    },
+    "PAYMENT_AUTO_REVERSAL": {
+      "en": "I checked payment {txn_id} of {amount}. The customer's bank confirms it failed, so the money is being reversed to the customer automatically, usually within one working day. Please ask the customer to pay again; you haven't lost anything.",
+      "hinglish": "Maine payment {txn_id} ({amount}) check kiya. Customer ke bank ne confirm kiya ki payment fail hua hai, isliye paisa customer ko apne aap wapas ho raha hai, aam taur par ek working day mein. Customer se dobara payment karwa lijiye, aapka kuch nuksaan nahi hua.",
+      "hi": "मैंने भुगतान {txn_id} ({amount}) जाँचा। ग्राहक के बैंक ने पुष्टि की कि भुगतान फेल हुआ है, इसलिए पैसा अपने आप ग्राहक को वापस हो रहा है, आमतौर पर एक कार्य दिवस में। ग्राहक से दोबारा भुगतान करवा लीजिए, आपका कोई नुकसान नहीं हुआ।"
+    },
+    "PAYMENT_NOT_DEBITED": {
+      "en": "I checked payment {txn_id} of {amount}. It failed before any money left the customer's account, so nothing needs reversing. The customer can simply pay again.",
+      "hinglish": "Maine payment {txn_id} ({amount}) check kiya. Ye customer ke account se paisa katne se pehle hi fail ho gaya tha, to kuch wapas karne ki zarurat nahi. Customer bas dobara payment kar de.",
+      "hi": "मैंने भुगतान {txn_id} ({amount}) जाँचा। यह ग्राहक के खाते से पैसा कटने से पहले ही फेल हो गया था, इसलिए कुछ वापस करने की ज़रूरत नहीं। ग्राहक बस दोबारा भुगतान कर दे।"
+    },
+    "PAYMENT_NOT_FOUND": {
+      "en": "I couldn't find a failed payment matching that. Could you share the transaction ID or the amount and roughly when it happened?",
+      "hinglish": "Mujhe aisa koi failed payment nahi mila. Transaction ID ya amount aur lagbhag time bata dijiye?",
+      "hi": "मुझे ऐसा कोई फेल भुगतान नहीं मिला। कृपया ट्रांज़ैक्शन ID या राशि और लगभग समय बताइए।"
+    },
+    "SETTLEMENT_RETRIED": {
+      "en": "Found it, {owner_first}. Your settlement {settlement_id} of {amount} was held because {bank_name}'s system timed out. I've re-sent it to your verified account {bank}; new reference {utr}. It should reach you within about 2 hours, and I'm tracking it under ticket {ticket_ref}.",
+      "hinglish": "Mil gaya {owner_first} ji! Aapka settlement {settlement_id} ({amount}) isliye ruka tha kyunki {bank_name} ka system time out ho gaya tha. Maine ise aapke verified account {bank} mein dobara bhej diya hai, naya reference {utr} hai. Lagbhag 2 ghante mein paisa aa jayega, aur main ise ticket {ticket_ref} mein track kar raha hoon.",
+      "hi": "मिल गया {owner_first} जी! आपका सेटलमेंट {settlement_id} ({amount}) इसलिए रुका था क्योंकि {bank_name} का सिस्टम टाइम आउट हो गया था। मैंने इसे आपके सत्यापित खाते {bank} में दोबारा भेज दिया है, नया रेफ़रेंस {utr} है। लगभग 2 घंटे में पैसा आ जाएगा, और मैं इसे टिकट {ticket_ref} में ट्रैक कर रहा हूँ।"
+    },
+    "SETTLEMENT_KYC_HOLD": {
+      "en": "Your settlement {settlement_id} of {amount} is paused because KYC is incomplete. Still needed: {docs}. Upload them under Profile > KYC and the money is released automatically once approved, usually within 24 hours. I've opened ticket {ticket_ref} to fast-track the review.",
+      "hinglish": "Aapka settlement {settlement_id} ({amount}) isliye ruka hai kyunki KYC poora nahi hai. Abhi chahiye: {docs}. Inhe Profile > KYC mein upload kar dijiye, approve hote hi paisa apne aap aa jayega, aam taur par 24 ghante mein. Maine review jaldi karwane ke liye ticket {ticket_ref} khol diya hai.",
+      "hi": "आपका सेटलमेंट {settlement_id} ({amount}) इसलिए रुका है क्योंकि KYC पूरा नहीं है। अभी चाहिए: {docs}। इन्हें प्रोफ़ाइल > KYC में अपलोड कीजिए, मंज़ूरी मिलते ही पैसा अपने आप आ जाएगा, आमतौर पर 24 घंटे में। मैंने समीक्षा जल्दी करवाने के लिए टिकट {ticket_ref} खोल दिया है।"
+    },
+    "SETTLEMENT_ON_TIME": {
+      "en": "Your latest settlement {settlement_id} of {amount} was credited to {bank} {when}, UTR {utr}. You can quote this UTR to your bank if it isn't showing yet.",
+      "hinglish": "Aapka latest settlement {settlement_id} ({amount}) {bank} mein {when} credit ho chuka hai, UTR {utr}. Agar abhi dikh nahi raha to bank ko ye UTR bata dijiye.",
+      "hi": "आपका नवीनतम सेटलमेंट {settlement_id} ({amount}) {bank} में {when} जमा हो चुका है, UTR {utr}। अगर अभी दिख नहीं रहा तो बैंक को यह UTR बता दीजिए।"
+    },
+    "REFUND_DONE": {
+      "en": "Refund {refund_id} of {amount} was processed successfully. The bank reference (ARN) is {arn}; the customer can share it with their bank to trace the credit.",
+      "hinglish": "Refund {refund_id} ({amount}) successfully process ho chuka hai. Bank reference (ARN) {arn} hai, customer ise apne bank ko de kar credit check kar sakta hai.",
+      "hi": "रिफंड {refund_id} ({amount}) सफलतापूर्वक प्रोसेस हो चुका है। बैंक रेफ़रेंस (ARN) {arn} है, ग्राहक इसे अपने बैंक को देकर क्रेडिट जाँच सकता है।"
+    },
+    "REFUND_IN_PROGRESS": {
+      "en": "Refund {refund_id} of {amount} is on its way and within the normal timeline. It should reach the customer within {eta}. I'll flag it if it runs late.",
+      "hinglish": "Refund {refund_id} ({amount}) process ho raha hai aur normal time ke andar hai. Customer ko {eta} mein mil jana chahiye. Late hua to main flag kar dunga.",
+      "hi": "रिफंड {refund_id} ({amount}) प्रोसेस हो रहा है और सामान्य समय के अंदर है। ग्राहक को {eta} में मिल जाना चाहिए। देर हुई तो मैं सूचित करूँगा।"
+    },
+    "REFUND_REINITIATED": {
+      "en": "Refund {refund_id} of {amount} had failed ({reason}). I've re-sent it to the customer's original payment source; new reference {ref}. It should reach them within 1-2 working days.",
+      "hinglish": "Refund {refund_id} ({amount}) fail ho gaya tha ({reason}). Maine ise customer ke original payment source par dobara bhej diya hai, naya reference {ref}. 1-2 working din mein mil jana chahiye.",
+      "hi": "रिफंड {refund_id} ({amount}) फेल हो गया था ({reason})। मैंने इसे ग्राहक के मूल भुगतान स्रोत पर दोबारा भेज दिया है, नया रेफ़रेंस {ref}। 1-2 कार्य दिवस में मिल जाना चाहिए।"
+    },
+    "REFUND_NEEDS_APPROVAL": {
+      "en": "I found the problem: refund {refund_id} of {amount} bounced because {reason}. It needs to be re-sent, and because it's above ₹5,000 a specialist has to approve it. I've sent them the full details, so you won't need to explain again. You'll get an update here.",
+      "hinglish": "Problem mil gayi: refund {refund_id} ({amount}) isliye wapas aa gaya kyunki {reason}. Ise dobara bhejna padega, aur ₹5,000 se zyada hone ki wajah se specialist ka approval chahiye. Maine unhe poori jaankari bhej di hai, aapko dobara batana nahi padega. Update yahin milega.",
+      "hi": "समस्या मिल गई: रिफंड {refund_id} ({amount}) वापस आ गया क्योंकि {reason}। इसे दोबारा भेजना होगा, और ₹5,000 से ज़्यादा होने के कारण विशेषज्ञ की मंज़ूरी चाहिए। मैंने उन्हें पूरी जानकारी भेज दी है, आपको दोबारा बताना नहीं पड़ेगा। अपडेट यहीं मिलेगा।"
+    },
+    "MONEY_NEEDS_APPROVAL": {
+      "en": "I've checked everything and the fix is ready, but it moves {amount}, which is above my ₹5,000 limit. A specialist will approve it shortly. They already have the full details, and you'll get an update here.",
+      "hinglish": "Maine sab check kar liya hai aur fix ready hai, par isme {amount} move hoga jo meri ₹5,000 ki limit se zyada hai. Specialist jaldi approve kar denge. Unke paas poori jaankari hai, update yahin milega.",
+      "hi": "मैंने सब जाँच लिया है और समाधान तैयार है, पर इसमें {amount} भेजे जाएँगे जो मेरी ₹5,000 की सीमा से ज़्यादा है। विशेषज्ञ जल्द मंज़ूरी देंगे। उनके पास पूरी जानकारी है, अपडेट यहीं मिलेगा।"
+    },
+    "SOUNDBOX_FIXED": {
+      "en": "Fixed, {owner_first}. Your Soundbox {device_id} had {issues}. I've remotely {fixes} and played a test announcement. Try a ₹1 payment to hear it.",
+      "hinglish": "Theek ho gaya {owner_first} ji! Aapke Soundbox {device_id} mein {issues} tha. Maine remotely {fixes} aur test announcement chala diya hai. ₹1 ka payment karke sun lijiye.",
+      "hi": "ठीक हो गया {owner_first} जी! आपके साउंडबॉक्स {device_id} में {issues} था। मैंने रिमोट से {fixes} और टेस्ट घोषणा चला दी है। ₹1 का भुगतान करके सुन लीजिए।"
+    },
+    "SOUNDBOX_REPLACEMENT": {
+      "en": "Your Soundbox {device_id} has a hardware fault I can't fix remotely. I've booked a free replacement under ticket {ticket_ref}; a technician will contact you within 24 hours.",
+      "hinglish": "Aapke Soundbox {device_id} mein hardware fault hai jo remotely theek nahi ho sakta. Maine ticket {ticket_ref} mein free replacement book kar diya hai; 24 ghante mein technician contact karega.",
+      "hi": "आपके साउंडबॉक्स {device_id} में हार्डवेयर खराबी है जो रिमोट से ठीक नहीं हो सकती। मैंने टिकट {ticket_ref} में मुफ़्त रिप्लेसमेंट बुक कर दिया है; 24 घंटे में तकनीशियन संपर्क करेगा।"
+    },
+    "SOUNDBOX_OK": {
+      "en": "I ran a check on Soundbox {device_id}: it's online, volume is {volume}% and the signal is good. If it still misses an announcement, share the transaction ID and I'll trace it.",
+      "hinglish": "Maine Soundbox {device_id} check kiya: online hai, volume {volume}% hai aur signal achha hai. Phir bhi koi announcement miss ho to transaction ID bhejiye, main trace kar dunga.",
+      "hi": "मैंने साउंडबॉक्स {device_id} जाँचा: ऑनलाइन है, वॉल्यूम {volume}% है और सिग्नल अच्छा है। फिर भी कोई घोषणा छूटे तो ट्रांज़ैक्शन ID भेजिए, मैं ट्रेस करूँगा।"
+    },
+    "KYC_GUIDANCE": {
+      "en": "Your KYC is almost done. Still needed: {docs}. Upload them in the app under Profile > KYC. Approval usually takes up to 24 hours, and any held settlement is released automatically.",
+      "hinglish": "Aapka KYC lagbhag poora hai. Abhi chahiye: {docs}. App mein Profile > KYC mein upload kijiye. Approval mein aam taur par 24 ghante lagte hain, aur ruka hua settlement apne aap release ho jayega.",
+      "hi": "आपका KYC लगभग पूरा है। अभी चाहिए: {docs}। ऐप में प्रोफ़ाइल > KYC में अपलोड कीजिए। मंज़ूरी में आमतौर पर 24 घंटे लगते हैं, और रुका हुआ सेटलमेंट अपने आप जारी हो जाएगा।"
+    },
+    "KYC_VERIFIED": {
+      "en": "Your KYC is fully verified, so nothing is pending on your side. For reference: {answer}",
+      "hinglish": "Aapka KYC poori tarah verified hai, aapki taraf se kuch pending nahi. Jaankari ke liye: {answer}",
+      "hi": "आपका KYC पूरी तरह सत्यापित है, आपकी तरफ़ से कुछ बाकी नहीं। जानकारी के लिए: {answer}"
+    },
+    "FAQ_ANSWER": {
+      "en": "{answer}",
+      "hinglish": "{answer}",
+      "hi": "{answer}"
+    },
+    "HUMAN_HANDOFF": {
+      "en": "Of course. I've passed your case to a human specialist with everything we discussed, so you won't have to repeat yourself. They'll reply here shortly.",
+      "hinglish": "Bilkul. Maine aapka case poori jaankari ke saath ek specialist ko de diya hai, aapko dobara batana nahi padega. Wo jaldi yahin reply karenge.",
+      "hi": "ज़रूर। मैंने आपका केस पूरी जानकारी के साथ एक विशेषज्ञ को दे दिया है, आपको दोबारा बताना नहीं पड़ेगा। वे जल्द यहीं जवाब देंगे।"
+    },
+    "LOW_CONFIDENCE": {
+      "en": "I want to get this right, so I've passed it to a specialist with what you've told me and your recent account activity. They'll reply here shortly. If you can share a transaction ID or amount, add it here and they'll see it.",
+      "hinglish": "Main ise sahi tarah handle karna chahta hoon, isliye maine aapki baat aur account activity ke saath ise specialist ko de diya hai. Wo jaldi yahin reply karenge. Transaction ID ya amount ho to yahin likh dijiye.",
+      "hi": "मैं इसे सही तरह संभालना चाहता हूँ, इसलिए मैंने आपकी बात और खाते की गतिविधि के साथ इसे विशेषज्ञ को दे दिया है। वे जल्द यहीं जवाब देंगे। ट्रांज़ैक्शन ID या राशि हो तो यहीं लिख दीजिए।"
+    },
+    "APPROVED_FOLLOWUP": {
+      "en": "Update from {specialist} (PayMates specialist): approved. {action_done} Reference {ref}. Your ticket {ticket_id} is now closed.",
+      "hinglish": "{specialist} (PayMates specialist) se update: approve ho gaya. {action_done} Reference {ref}. Aapka ticket {ticket_id} band ho gaya hai.",
+      "hi": "{specialist} (PayMates विशेषज्ञ) से अपडेट: मंज़ूरी मिल गई। {action_done} रेफ़रेंस {ref}। आपका टिकट {ticket_id} बंद हो गया है।"
+    },
+    "REJECTED_FOLLOWUP": {
+      "en": "Update from {specialist} (PayMates specialist): we need one more check before moving this money. {note} We'll call you on your registered number.",
+      "hinglish": "{specialist} (PayMates specialist) se update: paisa bhejne se pehle ek aur check zaroori hai. {note} Hum aapke registered number par call karenge.",
+      "hi": "{specialist} (PayMates विशेषज्ञ) से अपडेट: पैसा भेजने से पहले एक और जाँच ज़रूरी है। {note} हम आपके पंजीकृत नंबर पर कॉल करेंगे।"
+    },
+    "SETTLEMENT_PROCESSING": {
+      "en": "Your settlement {settlement_id} of {amount} is already on its way to {bank}, reference {utr}. It should arrive within about 2 hours.",
+      "hinglish": "Aapka settlement {settlement_id} ({amount}) {bank} ki taraf raste mein hai, reference {utr}. Lagbhag 2 ghante mein aa jana chahiye.",
+      "hi": "आपका सेटलमेंट {settlement_id} ({amount}) {bank} की ओर भेजा जा चुका है, रेफ़रेंस {utr}। लगभग 2 घंटे में आ जाना चाहिए।"
+    },
+    "REFUND_NOT_FOUND": {
+      "en": "I couldn't find a refund matching that. Could you share the refund ID or the amount?",
+      "hinglish": "Mujhe aisa koi refund nahi mila. Refund ID ya amount bata dijiye?",
+      "hi": "मुझे ऐसा कोई रिफंड नहीं मिला। कृपया रिफंड ID या राशि बताइए।"
+    },
+    "GENERIC_RESOLVED": {
+      "en": "{summary}",
+      "hinglish": "{summary}",
+      "hi": "{summary}"
+    },
+    "COUNCIL_HOLD": {
+      "en": "I've checked everything and the fix is ready: {amount}. Before any money moves, my safety council double-checks it, and they've asked a specialist to take one more look. The specialist has the full details, so you won't need to explain again. You'll get an update here.",
+      "hinglish": "Maine sab check kar liya hai aur fix ready hai: {amount}. Paisa bhejne se pehle meri safety council use dobara check karti hai, aur unhone ek specialist se ek baar aur dekhne ko kaha hai. Unke paas poori jaankari hai, aapko dobara batana nahi padega. Update yahin milega.",
+      "hi": "मैंने सब जाँच लिया है और समाधान तैयार है: {amount}। पैसा भेजने से पहले मेरी सुरक्षा परिषद इसे दोबारा जाँचती है, और उन्होंने एक विशेषज्ञ से इसे एक बार और देखने को कहा है। उनके पास पूरी जानकारी है, आपको दोबारा बताना नहीं पड़ेगा। अपडेट यहीं मिलेगा।"
+    }
+  },
+  "action_done": {
+    "reinitiate_refund": {
+      "en": "The refund of {amount} has been re-sent to the customer.",
+      "hinglish": "{amount} ka refund customer ko dobara bhej diya gaya hai.",
+      "hi": "{amount} का रिफंड ग्राहक को दोबारा भेज दिया गया है।"
+    },
+    "mark_payment_recovered": {
+      "en": "Payment of {amount} has been marked successful and added to your settlement.",
+      "hinglish": "{amount} ka payment successful mark ho gaya aur settlement mein jud gaya.",
+      "hi": "{amount} का भुगतान सफल मार्क हो गया और सेटलमेंट में जुड़ गया।"
+    },
+    "retry_settlement": {
+      "en": "Settlement of {amount} has been re-sent to your bank.",
+      "hinglish": "{amount} ka settlement aapke bank mein dobara bhej diya gaya.",
+      "hi": "{amount} का सेटलमेंट आपके बैंक में दोबारा भेज दिया गया।"
+    },
+    "none": {
+      "en": "Your case has been reviewed and handled.",
+      "hinglish": "Aapka case dekh kar handle kar diya gaya hai.",
+      "hi": "आपका केस देखकर संभाल लिया गया है।"
+    }
+  },
+  "phrases": {
+    "issue_volume": {
+      "en": "volume set to 0%",
+      "hinglish": "volume 0% par",
+      "hi": "वॉल्यूम 0% पर"
+    },
+    "issue_signal": {
+      "en": "a weak network signal",
+      "hinglish": "weak network signal",
+      "hi": "कमज़ोर नेटवर्क सिग्नल"
+    },
+    "fix_volume": {
+      "en": "set the volume to 80%",
+      "hinglish": "volume 80% kar diya",
+      "hi": "वॉल्यूम 80% कर दिया"
+    },
+    "fix_fallback": {
+      "en": "switched on network fallback",
+      "hinglish": "network fallback on kar diya",
+      "hi": "नेटवर्क फ़ॉलबैक चालू कर दिया"
+    },
+    "and": {
+      "en": " and ",
+      "hinglish": " aur ",
+      "hi": " और "
+    },
+    "eta_day": {
+      "en": "1 working day",
+      "hinglish": "1 working din",
+      "hi": "1 कार्य दिवस"
+    },
+    "hours_ago": {
+      "en": "{n} hours ago",
+      "hinglish": "{n} ghante pehle",
+      "hi": "{n} घंटे पहले"
+    },
+    "minutes_ago": {
+      "en": "{n} minutes ago",
+      "hinglish": "{n} minute pehle",
+      "hi": "{n} मिनट पहले"
+    },
+    "reason_BANK_REJECTED_TECHNICAL": {
+      "en": "the customer's bank rejected it with a technical error",
+      "hinglish": "customer ke bank ne technical error se reject kar diya",
+      "hi": "ग्राहक के बैंक ने तकनीकी त्रुटि के कारण अस्वीकार कर दिया"
+    },
+    "reason_ACCOUNT_FROZEN": {
+      "en": "the customer's account was temporarily frozen",
+      "hinglish": "customer ka account kuch samay ke liye freeze tha",
+      "hi": "ग्राहक का खाता कुछ समय के लिए फ़्रीज़ था"
+    },
+    "eta_2h": {
+      "en": "about 2 hours",
+      "hinglish": "lagbhag 2 ghante",
+      "hi": "लगभग 2 घंटे"
+    }
+  }
+}

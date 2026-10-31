@@ -1,0 +1,58 @@
+{
+  "_note": "Shared language rules for the offline (rules) engine. Used by both the Python backend and the in-browser prototype so they behave the same.",
+  "hinglish_markers": ["nahi","nhi","nahin","kya","hai","hain","kal","aaj","paisa","paise","aaya","aya","mera","meri","mere","kab","kyun","kyu","bhai","ji","karo","kardo","gaya","gayi","gaye","wapas","abhi","batao","bata","hua","hui","raha","rha","rahi","bol","awaaz","awaz","mujhe","chahiye","kaise","kitne","din","kaunse","kaun","ke","ka","ki","liye","mein","se","ho","jaldi","karna","karni","baat","dukaan","kata","kat"],
+  "strong_hinglish": ["nahi","nhi","nahin","kya","paisa","paise","aaya","aya","kab","wapas","batao","awaaz","awaz","chahiye","mujhe","kyun","kaise","kitne","gaya","hua","raha","kaunse","jaldi","kata","liye"],
+  "intents": {
+    "FAILED_PAYMENT": ["failed","fail","declined","deducted","debited","debit","kat gaya","kat gaye","kata","paisa kat","paise kat","money cut","double charged","stuck payment","फेल","कट गए","कट गया","कटे","डेबिट","असफल"],
+    "SETTLEMENT_DELAY": ["settlement","settle","payout","bank me nahi","bank mein nahi","not credited","utr","सेटलमेंट","बैंक में नहीं","खाते में नहीं"],
+    "REFUND_ISSUE": ["refund","wapas nahi mila","money back","रिफंड","वापस नहीं"],
+    "SOUNDBOX": ["soundbox","sound box","speaker","awaaz","awaz","announcement","announce","not speaking","bol nahi","bolta nahi","volume","beep","साउंडबॉक्स","आवाज़","आवाज","बोल नहीं","बोलता नहीं"],
+    "KYC": ["kyc","document","docs","kagaz","kagzaat","pan","aadhaar","gst","verification","केवाईसी","दस्तावेज","दस्तावेज़","कागज"],
+    "HUMAN_REQUEST": ["human","real person","customer care","talk to someone","talk to a person","call me","insaan","manager","baat karni","baat karao","किसी इंसान","कॉल करो","बात करनी"],
+    "GENERAL": ["how","when","what","kitne din","kab tak","kaise","timeline","policy","statement","report","qr","language","bhasha","dispute","chargeback","कब तक","कैसे"]
+  },
+  "intent_weights": { "GENERAL": 0.5 },
+  "rag_synonyms": {
+    "paisa": "money", "paise": "money", "kata": "deducted", "kat": "deducted", "nahi": "not", "aaya": "received",
+    "kal": "yesterday", "wapas": "refund", "awaaz": "sound announcing", "awaz": "sound announcing", "bol": "announcing",
+    "kagaz": "documents", "kagzaat": "documents", "bhasha": "language", "dukaan": "shop", "kab": "when", "kitne": "how many",
+    "सेटलमेंट": "settlement", "रिफंड": "refund", "साउंडबॉक्स": "soundbox", "केवाईसी": "kyc", "दस्तावेज": "documents", "दस्तावेज़": "documents", "भाषा": "language", "बैंक": "bank"
+  },
+  "stopwords": ["the","a","an","is","are","was","were","to","of","and","or","in","on","for","my","me","i","it","this","that","be","has","have","had","with","at","by","from","can","do","does","did","not","no","yes","please","pls","ji","hai","hain","ka","ki","ke","se","mein","me","ko","kya","ho","ya","bhi","toh","to","sir","madam","hi","hello"],
+  "simulation": {
+    "FAILED_PAYMENT": [
+      { "lang": "en", "text": "A customer paid {amount} but it shows failed. Their money was deducted." },
+      { "lang": "hinglish", "text": "Customer ka {amount} kat gaya par payment fail dikha raha hai" },
+      { "lang": "hi", "text": "ग्राहक के {amount} कट गए पर भुगतान फेल दिख रहा है" }
+    ],
+    "SETTLEMENT_DELAY": [
+      { "lang": "en", "text": "Yesterday's settlement has not reached my bank yet." },
+      { "lang": "hinglish", "text": "Kal ka settlement abhi tak bank mein nahi aaya" },
+      { "lang": "hi", "text": "कल का सेटलमेंट अभी तक बैंक में नहीं आया" }
+    ],
+    "REFUND_ISSUE": [
+      { "lang": "en", "text": "Customer says the refund of {amount} was not received." },
+      { "lang": "hinglish", "text": "Customer bol raha hai {amount} ka refund wapas nahi mila" }
+    ],
+    "SOUNDBOX": [
+      { "lang": "en", "text": "My soundbox is not announcing payments since morning." },
+      { "lang": "hinglish", "text": "Soundbox ki awaaz nahi aa rahi, payment bol nahi raha" },
+      { "lang": "hi", "text": "मेरा साउंडबॉक्स भुगतान बोल नहीं रहा" }
+    ],
+    "KYC": [
+      { "lang": "en", "text": "Which documents do I need for KYC?" },
+      { "lang": "hinglish", "text": "KYC ke liye kaunse documents chahiye?" }
+    ],
+    "GENERAL": [
+      { "lang": "en", "text": "How do I change the soundbox announcement language?" },
+      { "lang": "hinglish", "text": "Statement kaise download karein?" },
+      { "lang": "en", "text": "My QR code is not scanning properly, what should I do?" }
+    ],
+    "HUMAN_REQUEST": [
+      { "lang": "en", "text": "I want to talk to a real person about a customer dispute." }
+    ],
+    "UNCLEAR": [
+      { "lang": "en", "text": "Something is off with my account, can you look into it?" }
+    ]
+  }
+}
