@@ -78,9 +78,35 @@ def health():
         "mode": mode(),
         "routing": routing_table(),
         "providers": {name: provider_available(name) for name in PROVIDERS},
+        "autonomy_level": store.setting("autonomy_level", POLICY["default_autonomy"]),
         "council": ["auditor:ledger", "auditor:replay", "auditor:velocity"] + [j.label for j in council.jurors()],
         "policy": POLICY,
     }
+
+
+class PolicyIn(BaseModel):
+    autonomy_level: str
+    changed_by: str = "Ops"
+
+
+def _policy() -> dict:
+    return {"autonomy_level": store.setting("autonomy_level", POLICY["default_autonomy"]),
+            "levels": [{"id": k, **v} for k, v in POLICY["autonomy_levels"].items()]}
+
+
+@app.get("/api/policy")
+def get_policy():
+    return _policy()
+
+
+@app.post("/api/policy")
+def set_policy(body: PolicyIn):
+    if body.autonomy_level not in POLICY["autonomy_levels"]:
+        raise HTTPException(400, f"unknown autonomy level {body.autonomy_level}")
+    before = store.setting("autonomy_level", POLICY["default_autonomy"])
+    store.set_setting("autonomy_level", body.autonomy_level)
+    store.audit(None, f"ops:{body.changed_by}", "set_autonomy", {"from": before, "to": body.autonomy_level})
+    return _policy()
 
 
 @app.get("/api/merchants")

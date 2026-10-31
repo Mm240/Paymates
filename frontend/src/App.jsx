@@ -44,6 +44,7 @@ export default function App() {
   const [voice, setVoice] = useState(false)
   const [toast, setToast] = useState('')
   const [decidingId, setDecidingId] = useState(null)
+  const [policy, setPolicy] = useState(null)
   const toastTimer = useRef(null)
   const engineRef = useRef(null)
 
@@ -78,6 +79,7 @@ export default function App() {
     ;(async () => {
       setInfo(await engine.info())
       setMerchants(await engine.merchants())
+      try { setPolicy(await engine.policy()) } catch { /* older backend */ }
       refresh(engine)
       if (engine.kind === 'browser') setCanLive(await liveAvailable())
     })()
@@ -202,8 +204,19 @@ export default function App() {
     refresh()
   }
 
+  const changePolicy = async (level) => {
+    try {
+      const p = await engineRef.current.setPolicy(level, 'Ops')
+      setPolicy(p)
+      const lv = p.levels.find((x) => x.id === level)
+      say(`Autonomy set to ${lv.label}. ${lv.explain}`)
+      refresh()
+    } catch (err) { say(err.message) }
+  }
+
   const reset = async () => {
     await engineRef.current.reset()
+    try { setPolicy(await engineRef.current.policy()) } catch { /* ignore */ }
     setConvos({}); setTrace(null); setSim({ running: false, done: false, i: 0, n: 0 })
     setMerchants(await engineRef.current.merchants())
     refresh()
@@ -243,6 +256,7 @@ export default function App() {
           <span className="engine-pill" title={info?.routing ? Object.entries(info.routing).map(([a, m]) => `${a}: ${m}`).join('\n') : ''}>
             <span className={`dot ${engine?.kind === 'backend' || live ? '' : 'warn'}`} />
             {engineText}
+            {policy && <span className={`autonomy-tag ${policy.autonomy_level}`} title="Autonomy level, set by ops in the Human console">Autonomy: {policy.levels.find((x) => x.id === policy.autonomy_level)?.label}</span>}
             {engine?.kind === 'browser' && canLive && (
               <button className="switch" role="switch" aria-checked={live} onClick={toggleLive} disabled={busy}>
                 <span className="knob" />Claude
@@ -268,7 +282,7 @@ export default function App() {
         {view === 'dashboard' && (
           <Dashboard metrics={metrics} tickets={tickets} audit={audit} info={info} onSimulate={simulate} simState={sim} onReset={reset} />
         )}
-        {view === 'console' && <HumanConsole escalations={escalations} onDecide={decide} busyId={decidingId} />}
+        {view === 'console' && <HumanConsole escalations={escalations} onDecide={decide} busyId={decidingId} policy={policy} onPolicy={changePolicy} />}
         {view === 'how' && <HowItWorks info={info} />}
       </main>
       <Toast text={toast} />

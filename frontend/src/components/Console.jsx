@@ -3,7 +3,32 @@ import { Icon, INTENT_LABEL, fmtTime } from './ui.jsx'
 
 const isDeva = (t) => /[ऀ-ॿ]/.test(t || '')
 
-export function HumanConsole({ escalations, onDecide, busyId }) {
+function AutonomyDial({ policy, onPolicy }) {
+  if (!policy) return null
+  const cur = policy.levels.find((x) => x.id === policy.autonomy_level)
+  return (
+    <section className="panel autonomy">
+      <div className="autonomy-top">
+        <div>
+          <div className="eyebrow">Autonomy level</div>
+          <div className="muted" style={{ fontSize: 12.5 }}>Ops decides how much PayMates may do on its own. Every change is written to the audit log.</div>
+        </div>
+        <div className="seg" role="radiogroup" aria-label="Autonomy level">
+          {policy.levels.map((l) => (
+            <button key={l.id} role="radio" aria-checked={l.id === policy.autonomy_level} aria-pressed={l.id === policy.autonomy_level} onClick={() => onPolicy(l.id)}>{l.label}</button>
+          ))}
+        </div>
+      </div>
+      <ul className="autonomy-levels">
+        {policy.levels.map((l) => (
+          <li key={l.id} aria-current={l.id === cur?.id}><b>{l.label}</b>{l.explain}</li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+export function HumanConsole({ escalations, onDecide, busyId, policy, onPolicy }) {
   const [sel, setSel] = useState(null)
   const [note, setNote] = useState('')
   const [specialist, setSpecialist] = useState('Priya (Support)')
@@ -23,6 +48,7 @@ export function HumanConsole({ escalations, onDecide, busyId }) {
           <p>Cases PayMates handed over. Each one arrives with a briefing: what the merchant said, what was already checked, and the exact action proposed. Approving runs that action and replies to the merchant.</p>
         </div>
       </div>
+      <AutonomyDial policy={policy} onPolicy={onPolicy} />
       {!escalations.length && (
         <section className="panel empty">
           <p style={{ margin: '0 0 6px', color: 'var(--ink)', fontWeight: 600 }}>No handovers yet</p>

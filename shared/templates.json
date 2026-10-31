@@ -165,6 +165,11 @@
       "en": "Done, {owner_first}. Your Soundbox {device_id} will now announce payments in {language}. I've played a test announcement so you can hear it.",
       "hinglish": "Ho gaya {owner_first} ji! Aapka Soundbox {device_id} ab payments {language} mein bolega. Maine test announcement chala diya hai, sun lijiye.",
       "hi": "हो गया {owner_first} जी! आपका साउंडबॉक्स {device_id} अब भुगतान {language} में बोलेगा। मैंने टेस्ट घोषणा चला दी है, सुन लीजिए।"
+    },
+    "AUTONOMY_HOLD": {
+      "en": "I've checked everything and the fix is ready: {amount}. Right now my team wants a specialist to approve every money movement like this, so I've sent it to them with the full details. You won't need to explain again; you'll get an update here.",
+      "hinglish": "Maine sab check kar liya hai aur fix ready hai: {amount}. Abhi meri team chahti hai ki aise har paise ke kaam ko specialist approve kare, isliye maine unhe poori jaankari bhej di hai. Aapko dobara batana nahi padega, update yahin milega.",
+      "hi": "मैंने सब जाँच लिया है और समाधान तैयार है: {amount}। अभी मेरी टीम चाहती है कि ऐसे हर पैसे के काम को विशेषज्ञ मंज़ूरी दें, इसलिए मैंने उन्हें पूरी जानकारी भेज दी है। आपको दोबारा बताना नहीं पड़ेगा, अपडेट यहीं मिलेगा।"
     }
   },
   "action_done": {

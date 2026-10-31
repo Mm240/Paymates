@@ -4,6 +4,12 @@
     "auto_money_limit": 5000,
     "council_daily_cap": 25000,
     "council_daily_cap_kyc_pending": 2000,
+    "default_autonomy": "standard",
+    "autonomy_levels": {
+      "suggest": {"label": "Suggest only", "money_limit": 0, "explain": "Every money action waits for a human. PayMates still checks, explains and opens tickets."},
+      "low": {"label": "Low", "money_limit": 1000, "explain": "Money actions up to ₹1,000 run on their own; anything above waits for a human."},
+      "standard": {"label": "Standard", "money_limit": 5000, "explain": "Credits and refunds up to ₹5,000 run on their own, as do payout retries to the verified account."}
+    },
     "confidence_threshold": 0.6,
     "manual_minutes_per_ticket": 18,
     "retryable_hold_reasons": [

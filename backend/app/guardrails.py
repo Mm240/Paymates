@@ -24,6 +24,27 @@ def verdict(allowed: bool, rule: str, reason: str, requires_approval: bool = Fal
     return {"allowed": allowed, "requires_approval": requires_approval, "rule": rule, "reason": reason}
 
 
+LEVELS = POLICY["autonomy_levels"]
+
+
+def autonomy(store) -> tuple[str, int]:
+    """The ops-controlled autonomy level, read at call time: (level, autonomous money limit in ₹)."""
+    level = store.setting("autonomy_level", POLICY["default_autonomy"])
+    return level, LEVELS[level]["money_limit"]
+
+
+def money_hold(store, amount: int, always_capped: bool = True) -> Optional[dict]:
+    """Held-for-approval verdict if this amount is above what the current autonomy level allows, else None."""
+    level, limit = autonomy(store)
+    if level == "suggest":
+        return verdict(False, "autonomy-level", "Autonomy level is 'Suggest only': every money action needs a human", True)
+    if level != "standard" and amount > limit:
+        return verdict(False, "autonomy-level", f"Autonomy level '{LEVELS[level]['label']}': {inr(amount)} is above its {inr(limit)} limit", True)
+    if level == "standard" and always_capped and amount > LIMIT:
+        return verdict(False, "money-limit", f"{inr(amount)} is above the {inr(LIMIT)} autonomous limit", True)
+    return None
+
+
 def check(name: str, args: dict, store, merchant_id: str, approved_by: Optional[str] = None) -> dict:
     """Return a verdict for one proposed tool call."""
     # 1. Scope: the agent may only touch records of the merchant it is serving.
@@ -39,9 +60,9 @@ def check(name: str, args: dict, store, merchant_id: str, approved_by: Optional[
         txn = store.transaction(str(args.get("txn_id")))
         if not txn.get("bank_checked") or txn.get("bank_status") != "SUCCESS":
             return verdict(False, "evidence-required", "Bank has not confirmed this payment; recheck status first")
-        if txn["amount"] > LIMIT and not approved_by:
-            return verdict(False, "money-limit", f"{inr(txn['amount'])} is above the {inr(LIMIT)} autonomous limit", True)
-        return verdict(True, "money-limit", f"{inr(txn['amount'])} is within the {inr(LIMIT)} limit and bank-confirmed"
+        if not approved_by and (held := money_hold(store, txn["amount"])):
+            return held
+        return verdict(True, "money-limit", f"{inr(txn['amount'])} is within the {inr(autonomy(store)[1])} limit and bank-confirmed"
                        if not approved_by else f"Approved by {approved_by}")
 
     if name == "retry_settlement":
@@ -53,15 +74,19 @@ def check(name: str, args: dict, store, merchant_id: str, approved_by: Optional[
         merchant = store.merchant(merchant_id)
         if not merchant["bank_verified"] or s["destination"] != merchant["bank"]:
             return verdict(False, "verified-destination", "Destination is not the merchant's verified bank account")
-        return verdict(True, "verified-destination", f"Same amount to the same verified account ({s['destination']}); retry is idempotent")
+        # The merchant's own payout to their verified account: capped only below the standard level.
+        if not approved_by and (held := money_hold(store, s["amount"], always_capped=False)):
+            return held
+        return verdict(True, "verified-destination", f"Same amount to the same verified account ({s['destination']}); retry is idempotent"
+                       if not approved_by else f"Approved by {approved_by}")
 
     if name == "reinitiate_refund":
         r = store.refund(str(args.get("refund_id")))
         if r["status"] != "FAILED":
             return verdict(False, "state-check", f"Refund is {r['status']}, nothing to re-send")
-        if r["amount"] > LIMIT and not approved_by:
-            return verdict(False, "money-limit", f"{inr(r['amount'])} is above the {inr(LIMIT)} autonomous limit", True)
-        return verdict(True, "money-limit", f"{inr(r['amount'])} is within the {inr(LIMIT)} limit"
+        if not approved_by and (held := money_hold(store, r["amount"])):
+            return held
+        return verdict(True, "money-limit", f"{inr(r['amount'])} is within the {inr(autonomy(store)[1])} limit"
                        if not approved_by else f"Approved by {approved_by}")
 
     if name == "set_announcement_language":

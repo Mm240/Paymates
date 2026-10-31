@@ -65,6 +65,8 @@ export const remoteEngine = {
     const last = await stream(`/api/merchants/${mid}/checkin`, {}, onEvent)
     return last
   },
+  policy: () => json('/api/policy'),
+  setPolicy: (level, changedBy = 'Ops') => json('/api/policy', { method: 'POST', body: JSON.stringify({ autonomy_level: level, changed_by: changedBy }) }),
   metrics: () => json('/api/metrics'),
   tickets: () => json('/api/tickets'),
   escalations: () => json('/api/escalations'),

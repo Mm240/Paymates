@@ -54,6 +54,9 @@ CREATE TABLE escalations (
 CREATE TABLE audit (
   seq INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER, ticket_id TEXT, actor TEXT, action TEXT, detail TEXT
 );
+CREATE TABLE settings (
+  key TEXT PRIMARY KEY, value TEXT
+);
 CREATE TABLE messages (
   seq INTEGER PRIMARY KEY AUTOINCREMENT, merchant_id TEXT, role TEXT, text TEXT, ts INTEGER, ticket_id TEXT
 );
@@ -77,7 +80,7 @@ class Store:
             self.db.row_factory = sqlite3.Row
             cur = self.db.cursor()
             for table in ("merchants", "transactions", "settlements", "refunds", "tickets",
-                          "ops_tickets", "escalations", "audit", "messages"):
+                          "ops_tickets", "escalations", "audit", "messages", "settings"):
                 cur.execute(f"DROP TABLE IF EXISTS {table}")
             cur.executescript(SCHEMA)
             self.counters = {"ticket": 2400, "ops": 5100, "esc": 300, "utr": 880000, "ref": 61000}
@@ -214,6 +217,16 @@ class Store:
     # ------------------------------------------------------------------ domain writes
     def add_message(self, mid: str, role: str, text: str, ticket_id: Optional[str]) -> None:
         self.insert("messages", {"merchant_id": mid, "role": role, "text": text, "ts": now_ms(), "ticket_id": ticket_id})
+
+    def setting(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        with self.lock:
+            row = self.db.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return row[0] if row else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self.lock:
+            self.db.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))
+            self.db.commit()
 
     def audit(self, ticket_id: Optional[str], actor: str, action: str, detail: Any) -> None:
         self.insert("audit", {"ts": now_ms(), "ticket_id": ticket_id, "actor": actor, "action": action, "detail": detail})

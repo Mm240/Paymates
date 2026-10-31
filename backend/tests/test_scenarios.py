@@ -295,3 +295,47 @@ def test_soundbox_long_offline_books_technician(store):
     store.update("merchants", "M1002", {"soundbox": sb})
     t, ev = run(store, "M1002", "My soundbox is not announcing payments")
     assert t["outcome"] == "SOUNDBOX_REPLACEMENT" and "raise_ticket" in tools_called(ev)
+
+
+# ---------------------------------------------------------------- autonomy dial
+def test_autonomy_suggest_holds_demo_1_for_a_human(store):
+    store.set_setting("autonomy_level", "suggest")
+    t, ev = run(store, "M1001", "Customer's payment failed but money was deducted.")
+    assert t["status"] == "ESCALATED" and t["outcome"] == "AUTONOMY_HOLD"
+    esc = store.escalations()[0]
+    assert esc["proposed_action"]["tool"] == "mark_payment_recovered"
+    assert store.transaction("T88120045")["gateway_status"] == "FAILED"      # nothing moved
+    assert "₹5,000" not in t["reply"]
+    asyncio.run(ops.decide(store, esc["id"], True, "Priya"))                 # a human approves -> it runs
+    assert store.transaction("T88120045")["gateway_status"] == "SUCCESS"
+
+
+def test_autonomy_standard_is_the_default_and_unchanged(store):
+    t, _ = run(store, "M1001", "Customer's payment failed but money was deducted.")
+    assert t["status"] == "RESOLVED_AI" and t["outcome"] == "PAYMENT_RECOVERED"
+
+
+def test_autonomy_low_caps_money_at_1000(store):
+    store.set_setting("autonomy_level", "low")
+    t, _ = run(store, "M1001", "Kal ka settlement nahi aaya")                 # ₹18,640 payout retry
+    assert t["status"] == "ESCALATED" and t["outcome"] == "AUTONOMY_HOLD"
+    assert store.escalations()[0]["proposed_action"]["tool"] == "retry_settlement"
+    assert store.settlement("S2610300")["status"] == "ON_HOLD"
+
+
+def test_autonomy_suggest_still_allows_non_money_writes(store):
+    store.set_setting("autonomy_level", "suggest")
+    t, ev = run(store, "M1003", "कल का सेटलमेंट अभी तक बैंक में नहीं आया")       # KYC hold: guidance + raise_ticket
+    assert t["outcome"] == "SETTLEMENT_KYC_HOLD" and "raise_ticket" in tools_called(ev)
+
+
+def test_policy_api_audits_changes():
+    from fastapi.testclient import TestClient
+    from app.main import app, store as live_store
+    live_store.reset()
+    c = TestClient(app)
+    assert c.get("/api/policy").json()["autonomy_level"] == "standard"
+    assert c.post("/api/policy", json={"autonomy_level": "suggest", "changed_by": "Asha (Ops)"}).json()["autonomy_level"] == "suggest"
+    assert any(a["action"] == "set_autonomy" and a["actor"] == "ops:Asha (Ops)" for a in live_store.audit_log())
+    assert c.post("/api/policy", json={"autonomy_level": "yolo"}).status_code == 400
+    live_store.reset()

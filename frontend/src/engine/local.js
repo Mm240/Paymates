@@ -28,6 +28,7 @@ function freshStore() {
     merchants: new Map(), txns: new Map(), settlements: new Map(), refunds: new Map(),
     tickets: [], ops: [], escalations: [], audit: [], messages: [],
     counters: { ticket: 2400, ops: 5100, esc: 300, utr: 880000, ref: 61000 },
+    settings: { autonomy_level: seed.policy.default_autonomy },
   }
   seed.merchants.forEach((m) => st.merchants.set(m.id, clone(m)))
   seed.transactions.forEach((t) => st.txns.set(t.id, { ...t, created_at: at(t.at_min), bank_checked: false, recovered: false }))
@@ -51,6 +52,20 @@ const byDesc = (key) => (a, b) => (b[key] || 0) - (a[key] || 0)
 function verdict(allowed, rule, reason, requires_approval = false) {
   return { allowed, requires_approval, rule, reason }
 }
+const LEVELS = POLICY.autonomy_levels
+// The ops-controlled autonomy level, read at call time: [level, autonomous money limit in ₹].
+function autonomy() {
+  const level = S.settings.autonomy_level
+  return [level, LEVELS[level].money_limit]
+}
+// Held-for-approval verdict if the amount is above what the current autonomy level allows, else null.
+function moneyHold(amount, alwaysCapped = true) {
+  const [level, limit] = autonomy()
+  if (level === 'suggest') return verdict(false, 'autonomy-level', "Autonomy level is 'Suggest only': every money action needs a human", true)
+  if (level !== 'standard' && amount > limit) return verdict(false, 'autonomy-level', `Autonomy level '${LEVELS[level].label}': ${inr(amount)} is above its ${inr(limit)} limit`, true)
+  if (level === 'standard' && alwaysCapped && amount > LIMIT) return verdict(false, 'money-limit', `${inr(amount)} is above the ${inr(LIMIT)} autonomous limit`, true)
+  return null
+}
 function check(name, args, mid, approvedBy) {
   for (const [key, table] of [['txn_id', S.txns], ['settlement_id', S.settlements], ['refund_id', S.refunds]]) {
     if (key in args) {
@@ -62,8 +77,9 @@ function check(name, args, mid, approvedBy) {
   if (name === 'mark_payment_recovered') {
     const t = S.txns.get(String(args.txn_id))
     if (!t.bank_checked || t.bank_status !== 'SUCCESS') return verdict(false, 'evidence-required', 'Bank has not confirmed this payment; recheck status first')
-    if (t.amount > LIMIT && !approvedBy) return verdict(false, 'money-limit', `${inr(t.amount)} is above the ${inr(LIMIT)} autonomous limit`, true)
-    return verdict(true, 'money-limit', approvedBy ? `Approved by ${approvedBy}` : `${inr(t.amount)} is within the ${inr(LIMIT)} limit and bank-confirmed`)
+    const held = !approvedBy && moneyHold(t.amount)
+    if (held) return held
+    return verdict(true, 'money-limit', approvedBy ? `Approved by ${approvedBy}` : `${inr(t.amount)} is within the ${inr(autonomy()[1])} limit and bank-confirmed`)
   }
   if (name === 'retry_settlement') {
     const s = S.settlements.get(String(args.settlement_id))
@@ -71,13 +87,17 @@ function check(name, args, mid, approvedBy) {
     if (!RETRYABLE.has(s.hold_reason)) return verdict(false, 'retryable-only', `Hold reason ${s.hold_reason} cannot be retried automatically`)
     const m = S.merchants.get(mid)
     if (!m.bank_verified || s.destination !== m.bank) return verdict(false, 'verified-destination', "Destination is not the merchant's verified bank account")
-    return verdict(true, 'verified-destination', `Same amount to the same verified account (${s.destination}); retry is idempotent`)
+    // The merchant's own payout to their verified account: capped only below the standard level.
+    const held = !approvedBy && moneyHold(s.amount, false)
+    if (held) return held
+    return verdict(true, 'verified-destination', approvedBy ? `Approved by ${approvedBy}` : `Same amount to the same verified account (${s.destination}); retry is idempotent`)
   }
   if (name === 'reinitiate_refund') {
     const r = S.refunds.get(String(args.refund_id))
     if (r.status !== 'FAILED') return verdict(false, 'state-check', `Refund is ${r.status}, nothing to re-send`)
-    if (r.amount > LIMIT && !approvedBy) return verdict(false, 'money-limit', `${inr(r.amount)} is above the ${inr(LIMIT)} autonomous limit`, true)
-    return verdict(true, 'money-limit', approvedBy ? `Approved by ${approvedBy}` : `${inr(r.amount)} is within the ${inr(LIMIT)} limit`)
+    const held = !approvedBy && moneyHold(r.amount)
+    if (held) return held
+    return verdict(true, 'money-limit', approvedBy ? `Approved by ${approvedBy}` : `${inr(r.amount)} is within the ${inr(autonomy()[1])} limit`)
   }
   if (name === 'set_announcement_language') {
     if (!SOUNDBOX_LANGUAGES.has(String(args.language))) return verdict(false, 'value-range', `${args.language} is not a language the Soundbox supports`)
@@ -461,7 +481,10 @@ const pastTickets = (mid, n) => S.tickets.filter((t) => t.merchant_id === mid &&
 const res = (status, outcome, facts, summary, proposed = null, reason = null) => ({
   status, facts, summary, proposed_action: proposed, escalation_reason: reason,
   // within the money limit, but the Model Council said wait
-  outcome: outcome.endsWith('_NEEDS_APPROVAL') && String(reason || '').startsWith('Council held it') ? 'COUNCIL_HOLD' : outcome,
+  outcome: !outcome.endsWith('_NEEDS_APPROVAL') ? outcome
+    : String(reason || '').startsWith('Council held it') ? 'COUNCIL_HOLD' // within the limit, but the council said wait
+      : String(reason || '').startsWith('Autonomy level') ? 'AUTONOMY_HOLD' // ops turned autonomy down
+        : outcome,
 })
 const reasonText = (code, lang) => (code && TPL.phrases[`reason_${code}`] ? phrase(`reason_${code}`, lang) : code || '')
 
@@ -505,6 +528,10 @@ async function pbSettlement(run, tri, base) {
   if (row.status === 'PROCESSING') return res('RESOLVED_AI', 'SETTLEMENT_PROCESSING', facts, `${row.id} is processing, UTR ${row.utr}`)
   if (RETRYABLE.has(row.hold_reason)) {
     const x = await run.run('retry_settlement', { settlement_id: row.id })
+    if (x.blocked && x.requires_approval) {
+      return res('ESCALATE', 'MONEY_NEEDS_APPROVAL', facts, `Retry of ${row.id} (${inr(row.amount)}) held for approval`,
+        { tool: 'retry_settlement', args: { settlement_id: row.id }, label: `Re-send settlement ${row.id} of ${inr(row.amount)} to ${row.destination}` }, x.reason)
+    }
     if (x.blocked) return res('ESCALATE', 'LOW_CONFIDENCE', facts, `Retry of ${row.id} was blocked: ${x.reason}`, null, x.reason)
     const t = await run.run('raise_ticket', { category: 'settlements', priority: 'P2', summary: `Track re-sent settlement ${row.id} (${inr(row.amount)}), UTR ${x.new_utr}` })
     return res('RESOLVED_AI', 'SETTLEMENT_RETRIED', { ...facts, utr: x.new_utr, ticket_ref: t.ticket_ref }, `Re-sent ${row.id} (${inr(row.amount)}) after bank timeout; new UTR ${x.new_utr}`)
@@ -725,7 +752,7 @@ async function buildBriefing(merchant, text, tri, act, calls) {
     const amt = p.tool === 'reinitiate_refund' ? S.refunds.get(p.args.refund_id)?.amount : p.tool === 'mark_payment_recovered' ? S.txns.get(p.args.txn_id)?.amount : null
     if (amt > LIMIT) risk.push(`Moves ${inr(amt)}, above the ${inr(LIMIT)} autonomous limit`)
   }
-  if (String(act.escalation_reason || '').startsWith('Council held it')) risk.push(act.escalation_reason)
+  if (/^(Council held it|Autonomy level)/.test(String(act.escalation_reason || ''))) risk.push(act.escalation_reason)
   if (tri.confidence < POLICY.confidence_threshold) risk.push(`Low triage confidence (${Math.round(tri.confidence * 100)}%)`)
   if (tri.intent === 'HUMAN_REQUEST') risk.push('Merchant asked for a person')
   if (pastTickets(merchant.id, 5).filter((t) => t.intent === tri.intent).length >= 2) risk.push('Repeat issue for this merchant')
@@ -733,6 +760,7 @@ async function buildBriefing(merchant, text, tri, act, calls) {
     REFUND_NEEDS_APPROVAL: `Re-send failed refund ${act.facts.refund_id} (${act.facts.amount}) — needs approval`,
     MONEY_NEEDS_APPROVAL: `Money movement of ${act.facts.amount} needs approval`,
     COUNCIL_HOLD: `Model Council held a ${act.facts.amount} money movement`,
+    AUTONOMY_HOLD: `${act.facts.amount} money movement waiting for approval (autonomy level)`,
     HUMAN_HANDOFF: 'Merchant asked to speak to a person',
   }[act.outcome] || "Case needs a specialist's judgement"
   const briefing = {
@@ -1060,6 +1088,16 @@ export async function simulate(n, onEvent = () => {}, seedVal = Date.now()) {
   return metrics()
 }
 
+// ====================================================================== autonomy dial
+const policyView = () => ({ autonomy_level: S.settings.autonomy_level, levels: Object.entries(LEVELS).map(([id, v]) => ({ id, ...v })) })
+export function setPolicy(level, changedBy = 'Ops') {
+  if (!LEVELS[level]) throw new Error(`unknown autonomy level ${level}`)
+  const before = S.settings.autonomy_level
+  S.settings.autonomy_level = level
+  audit(null, `ops:${changedBy}`, 'set_autonomy', { from: before, to: level })
+  return policyView()
+}
+
 // ====================================================================== public engine
 export const localEngine = {
   kind: 'browser',
@@ -1067,9 +1105,11 @@ export const localEngine = {
     return {
       engine: 'browser', mode: live ? 'claude' : 'rules', live,
       routing: live ? { ...CLAUDE } : { triage: 'rules-engine', action: 'playbook-engine', responder: 'templates', escalation: 'template' },
-      policy: POLICY,
+      policy: POLICY, autonomy_level: S.settings.autonomy_level,
     }
   },
+  async policy() { return policyView() },
+  async setPolicy(level, changedBy = 'Ops') { return setPolicy(level, changedBy) },
   setLive(on) { live = Boolean(on) },
   async merchants() { return [...S.merchants.values()].filter((m) => m.id.startsWith('M1')).map(clone) },
   async snapshot(mid) {

@@ -62,7 +62,7 @@ def risk_flags(tri: dict, act: dict, store, merchant_id: str) -> list[str]:
             amt = store.transaction(p["args"]["txn_id"])["amount"]
         if amt and amt > LIMIT:
             flags.append(f"Moves {inr(amt)}, above the {inr(LIMIT)} autonomous limit")
-    if (act.get("escalation_reason") or "").startswith("Council held it"):
+    if (act.get("escalation_reason") or "").startswith(("Council held it", "Autonomy level")):
         flags.append(act["escalation_reason"])
     if tri["confidence"] < POLICY["confidence_threshold"]:
         flags.append(f"Low triage confidence ({int(tri['confidence'] * 100)}%)")
@@ -81,6 +81,7 @@ async def build_briefing(store, merchant: dict, ticket_id: str, text: str, tri: 
         "REFUND_NEEDS_APPROVAL": f"Re-send failed refund {act['facts'].get('refund_id')} ({act['facts'].get('amount')}) — needs approval",
         "MONEY_NEEDS_APPROVAL": f"Money movement of {act['facts'].get('amount')} needs approval",
         "COUNCIL_HOLD": f"Model Council held a {act['facts'].get('amount')} money movement",
+        "AUTONOMY_HOLD": f"{act['facts'].get('amount')} money movement waiting for approval (autonomy level)",
         "HUMAN_HANDOFF": "Merchant asked to speak to a person",
     }.get(act["outcome"], "Case needs a specialist's judgement")
     briefing = {

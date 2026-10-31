@@ -29,6 +29,8 @@ def result(status: str, outcome: str, facts: dict, summary: str, proposed: Optio
            reason: Optional[str] = None) -> dict:
     if outcome.endswith("_NEEDS_APPROVAL") and (reason or "").startswith("Council held it"):
         outcome = "COUNCIL_HOLD"        # within the money limit, but the Model Council said wait
+    elif outcome.endswith("_NEEDS_APPROVAL") and (reason or "").startswith("Autonomy level"):
+        outcome = "AUTONOMY_HOLD"       # ops turned autonomy down; a human approves money moves for now
     return {"status": status, "outcome": outcome, "facts": facts, "summary": summary,
             "proposed_action": proposed, "escalation_reason": reason}
 
@@ -101,6 +103,10 @@ async def pb_settlement(run: ToolRunner, store: Store, tri: dict, base: dict) ->
 
     if row["hold_reason"] in POLICY["retryable_hold_reasons"]:
         res = await run.run("retry_settlement", {"settlement_id": row["id"]})
+        if res.get("blocked") and res.get("requires_approval"):
+            return result("ESCALATE", "MONEY_NEEDS_APPROVAL", facts, f"Retry of {row['id']} ({inr(row['amount'])}) held for approval",
+                          {"tool": "retry_settlement", "args": {"settlement_id": row["id"]},
+                           "label": f"Re-send settlement {row['id']} of {inr(row['amount'])} to {row['destination']}"}, res.get("reason"))
         if res.get("blocked"):
             return result("ESCALATE", "LOW_CONFIDENCE", facts, f"Retry of {row['id']} was blocked: {res.get('reason')}",
                           None, res.get("reason"))
